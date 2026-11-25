@@ -52,6 +52,12 @@ var npc_dialog_panel: PanelContainer
 var npc_dialog_label: Label
 var npc_nearby := false
 var npc_node: Node3D
+var shop_panel: PanelContainer
+var shop_label: Label
+var shop_buttons: Dictionary = {}
+var ash_shards := 0
+var shop_damage_bonus := 0.0
+var shop_health_bonus := 0.0
 
 func _ready() -> void:
 	_load_progress()
@@ -80,10 +86,13 @@ func _load_progress() -> void:
 	strength_attribute = maxi(0, int(save.get_value("hero", "strength", 0)))
 	vitality_attribute = maxi(0, int(save.get_value("hero", "vitality", 0)))
 	arcane_attribute = maxi(0, int(save.get_value("hero", "arcane", 0)))
+	ash_shards = maxi(0, int(save.get_value("shop", "ash_shards", 0)))
+	shop_damage_bonus = maxf(0.0, float(save.get_value("shop", "damage_bonus", 0.0)))
+	shop_health_bonus = maxf(0.0, float(save.get_value("shop", "health_bonus", 0.0)))
 	quest_index = clampi(int(save.get_value("quests", "index", 0)), 0, 1)
 	quest_progress = maxi(0, int(save.get_value("quests", "progress", 0)))
 	quests_completed = maxi(0, int(save.get_value("quests", "completed", 0)))
-	max_player_health = 100.0 + float(vitality_attribute) * 10.0
+	max_player_health = 100.0 + float(vitality_attribute) * 10.0 + shop_health_bonus
 	player_health = max_player_health
 
 func _save_progress() -> void:
@@ -94,6 +103,9 @@ func _save_progress() -> void:
 	save.set_value("hero", "strength", strength_attribute)
 	save.set_value("hero", "vitality", vitality_attribute)
 	save.set_value("hero", "arcane", arcane_attribute)
+	save.set_value("shop", "ash_shards", ash_shards)
+	save.set_value("shop", "damage_bonus", shop_damage_bonus)
+	save.set_value("shop", "health_bonus", shop_health_bonus)
 	save.set_value("quests", "index", quest_index)
 	save.set_value("quests", "progress", quest_progress)
 	save.set_value("quests", "completed", quests_completed)
@@ -733,9 +745,37 @@ func _create_hud() -> void:
 	layer.add_child(npc_dialog_panel)
 	var dialog_box := VBoxContainer.new()
 	npc_dialog_panel.add_child(dialog_box)
+	shop_panel = PanelContainer.new()
+	shop_panel.position = Vector2(0, 0)
+	shop_panel.anchor_left = 0.18
+	shop_panel.anchor_right = 0.82
+	shop_panel.anchor_top = 0.20
+	shop_panel.anchor_bottom = 0.78
+	shop_panel.visible = false
+	layer.add_child(shop_panel)
+	var shop_box := VBoxContainer.new()
+	shop_panel.add_child(shop_box)
+	shop_label = Label.new()
+	shop_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	shop_box.add_child(shop_label)
+	for item in ["DANO", "VIDA", "CURA"]:
+		var buy_button := Button.new()
+		buy_button.custom_minimum_size.y = 42
+		buy_button.pressed.connect(_buy_shop_item.bind(item))
+		shop_box.add_child(buy_button)
+		shop_buttons[item] = buy_button
+	var close_shop := Button.new()
+	close_shop.text = "FECHAR LOJA"
+	close_shop.pressed.connect(func(): shop_panel.visible = false)
+	shop_box.add_child(close_shop)
 	npc_dialog_label = Label.new()
 	npc_dialog_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	dialog_box.add_child(npc_dialog_label)
+	var shop_button := Button.new()
+	shop_button.text = "ABRIR LOJA DO ORÁCULO"
+	shop_button.custom_minimum_size.y = 42
+	shop_button.pressed.connect(_open_shop)
+	dialog_box.add_child(shop_button)
 	var close_dialog := Button.new()
 	close_dialog.text = "FECHAR"
 	close_dialog.pressed.connect(func(): npc_dialog_panel.visible = false)
@@ -787,6 +827,43 @@ func _toggle_npc_dialog() -> void:
 	if npc_dialog_panel.visible:
 		npc_dialog_label.text = "ORÁCULO DAS CINZAS\n\nAs ruínas estão despertando. " + _quest_description() + ".\n\n" + ("Prove sua força contra os guardiões. Cada vitória concede experiência." if quest_index == 0 else "O tirano abissal aguarda no portal. Derrote Nekravor para receber a recompensa lendária.") + "\n\nContratos concluídos: %d" % quests_completed
 
+func _open_shop() -> void:
+	if not npc_nearby or shop_panel == null:
+		return
+	npc_dialog_panel.visible = false
+	shop_panel.visible = true
+	_update_shop()
+
+func _buy_shop_item(item: String) -> void:
+	var cost := 80 if item == "DANO" else (65 if item == "VIDA" else 25)
+	if ash_shards < cost:
+		return
+	ash_shards -= cost
+	match item:
+		"DANO":
+			shop_damage_bonus += 0.05
+		"VIDA":
+			shop_health_bonus += 20.0
+			max_player_health += 20.0
+			player_health = minf(max_player_health, player_health + 20.0)
+		"CURA":
+			player_health = minf(max_player_health, player_health + 45.0)
+	_save_progress()
+	_update_shop()
+	_update_inventory()
+	_update_status()
+
+func _update_shop() -> void:
+	if shop_label == null:
+		return
+	shop_label.text = "LOJA DO ORÁCULO DAS CINZAS\\nFragmentos disponíveis: %d\\n\\nDANO SOMBRIO — 80 fragmentos\\n+5%% de dano permanente\\n\\nVITALIDADE — 65 fragmentos\\n+20 de vida máxima\\n\\nELIXIR DAS CINZAS — 25 fragmentos\\nRecupera até 45 de vida" % ash_shards
+	for item in ["DANO", "VIDA", "CURA"]:
+		var button := shop_buttons.get(item) as Button
+		if button:
+			var cost := 80 if item == "DANO" else (65 if item == "VIDA" else 25)
+			button.disabled = ash_shards < cost
+			button.text = ("COMPRAR DANO — 80" if item == "DANO" else ("COMPRAR VIDA — 65" if item == "VIDA" else "COMPRAR CURA — 25"))
+
 func _on_control(action: String) -> void:
 	if boss_intro_timer > 0.0:
 		return
@@ -816,7 +893,7 @@ func _on_control(action: String) -> void:
 func _damage_enemy(enemy: Node3D, amount: float) -> void:
 	if not is_instance_valid(enemy):
 		return
-	var final_damage := amount * (1.0 + relic_damage_bonus)
+	var final_damage := amount * (1.0 + relic_damage_bonus + shop_damage_bonus)
 	var hp := float(enemy.get_meta("health", 90.0)) - final_damage
 	enemy.set_meta("health", hp)
 	if hp <= 0.0:
@@ -824,6 +901,9 @@ func _damage_enemy(enemy: Node3D, amount: float) -> void:
 		var defeated_boss := bool(enemy.get_meta("is_boss", false))
 		_advance_quest(defeated_boss)
 		_gain_experience(180 if defeated_boss else 35)
+		ash_shards += 100 if defeated_boss else 12
+		_save_progress()
+		_update_shop()
 		enemies.erase(enemy)
 		enemy.queue_free()
 		if defeated_boss:
@@ -900,7 +980,7 @@ func _cycle_equipment(kind: String) -> void:
 	_update_inventory()
 
 func _inventory_text() -> String:
-	return "INVENTÁRIO ABISSAL\nNível %d  |  XP: %d/%d  |  Pontos: %d\nForça %d  •  Vitalidade %d  •  Arcano %d\nVida máxima: %d  |  Relíquias: %d  |  Dano global: +%d%%\nEquipamentos aprimorados causam mais dano e atacam mais rápido.\nCada relíquia libera um nível (máx. 3)." % [player_level, player_xp, _xp_to_next_level(), unspent_attribute_points, strength_attribute, vitality_attribute, arcane_attribute, int(max_player_health), relic_count, int(relic_damage_bonus * 100.0)]
+	return "INVENTÁRIO ABISSAL\nNível %d  |  XP: %d/%d  |  Pontos: %d\nForça %d  •  Vitalidade %d  •  Arcano %d\nVida máxima: %d  |  Relíquias: %d  |  Dano global: +%d%%\nFragmentos de Cinza: %d  |  Bônus da loja: +%d%% dano / +%d vida\nEquipamentos aprimorados causam mais dano e atacam mais rápido.\nCada relíquia libera um nível (máx. 3)." % [player_level, player_xp, _xp_to_next_level(), unspent_attribute_points, strength_attribute, vitality_attribute, arcane_attribute, int(max_player_health), relic_count, int(relic_damage_bonus * 100.0), ash_shards, int(shop_damage_bonus * 100.0), int(shop_health_bonus)]
 
 func _update_inventory() -> void:
 	if inventory_label:
@@ -1218,6 +1298,7 @@ func _update_status() -> void:
 	if status_label:
 		status_label.text = "Nv.%d  XP %d/%d  |  Vida: %d/%d  |  Horda: %d  |  Ordem: %s  |  Classe: %s  |  Combo: %d/3  |  Defesa: %s  |  Onda: %d" % [player_level, player_xp, _xp_to_next_level(), int(player_health), int(max_player_health), minions.size(), selected_order, selected_class, combo_step, "ON" if guarding else "OFF", wave]
 	_update_quest_hud()
+	_update_shop()
 
 func _physics_process(delta: float) -> void:
 	if is_instance_valid(player) and is_instance_valid(npc_node):
