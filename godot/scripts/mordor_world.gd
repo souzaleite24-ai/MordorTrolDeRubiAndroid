@@ -33,6 +33,8 @@ var boss_intro_timer := 0.0
 var boss_intro_target: Node3D
 var relic_count := 0
 var relic_damage_bonus := 0.0
+var inventory_panel: PanelContainer
+var inventory_label: Label
 
 func _ready() -> void:
 	_setup_input()
@@ -540,6 +542,15 @@ func _create_hud() -> void:
 	boss_intro_label.add_theme_color_override("font_color", Color(0.88, 0.68, 1.0))
 	boss_intro_label.visible = false
 	layer.add_child(boss_intro_label)
+	inventory_panel = PanelContainer.new()
+	inventory_panel.position = Vector2(18, 158)
+	inventory_panel.custom_minimum_size = Vector2(290, 170)
+	inventory_panel.visible = false
+	layer.add_child(inventory_panel)
+	inventory_label = Label.new()
+	inventory_label.text = _inventory_text()
+	inventory_label.add_theme_font_size_override("font_size", 14)
+	inventory_panel.add_child(inventory_label)
 	var controls := HBoxContainer.new()
 	controls.anchor_left = 0.0
 	controls.anchor_top = 1.0
@@ -548,7 +559,7 @@ func _create_hud() -> void:
 	controls.offset_top = -76
 	controls.offset_bottom = -12
 	layer.add_child(controls)
-	for action in ["ATACAR", "ESPECIAL", "ESQUIVA", "DEFESA", "ORDEN", "CLASSE"]:
+	for action in ["ATACAR", "ESPECIAL", "ESQUIVA", "DEFESA", "ORDEN", "CLASSE", "INVENTARIO"]:
 		var button := Button.new()
 		button.text = action
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -600,6 +611,9 @@ func _on_control(action: String) -> void:
 			var keys := MINION_COLORS.keys()
 			selected_class = keys[(keys.find(selected_class) + 1) % keys.size()]
 			_update_status()
+		"INVENTARIO":
+			inventory_panel.visible = not inventory_panel.visible
+			_update_inventory()
 
 func _damage_enemy(enemy: Node3D, amount: float) -> void:
 	if not is_instance_valid(enemy):
@@ -619,6 +633,7 @@ func _damage_enemy(enemy: Node3D, amount: float) -> void:
 			player_health = minf(100.0, player_health + 30.0)
 			_spawn_special_ring(at + Vector3(0, 0.15, 0), Color(0.72, 0.32, 1.0), 7.0)
 			_show_relic_reward()
+			_update_inventory()
 			if boss_name_label:
 				boss_name_label.visible = false
 			if boss_health_bar:
@@ -669,6 +684,13 @@ func _upgrade_minion_relics() -> void:
 		var halo_node := minion.get_node("RelicHalo") as MeshInstance3D
 		halo_node.material_override = glow
 		halo_node.scale = Vector3.ONE * (1.0 + float(relic_count - 1) * 0.12)
+
+func _inventory_text() -> String:
+	return "INVENTÁRIO ABISSAL\nRelíquias: %d\nDano total: +%d%%\nVida máxima: 100  |  Cura por chefe: +30\n\nBRUTAMONTES — Martelo do Núcleo\nASSASSINO — Gêmeas do Eclipse\nPIROMANTE — Orbe da Chama\nXAMÃ — Totem da Aurora" % [relic_count, int(relic_damage_bonus * 100.0)]
+
+func _update_inventory() -> void:
+	if inventory_label:
+		inventory_label.text = _inventory_text()
 
 func _show_relic_reward() -> void:
 	if not boss_intro_label:
