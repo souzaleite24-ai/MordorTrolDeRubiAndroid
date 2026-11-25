@@ -402,6 +402,7 @@ func _create_boss(at: Vector3) -> void:
 			tentacle.position = Vector3(side * (0.42 + segment * 0.17), 2.2 - segment * 0.48, -0.38)
 			tentacle.rotation.z = side * (0.55 + segment * 0.22)
 			tentacle.material_override = abyss
+			tentacle.set_meta("boss_tentacle", true)
 			boss.add_child(tentacle)
 	var crown := MeshInstance3D.new()
 	var crown_mesh := TorusMesh.new()
@@ -750,8 +751,10 @@ func _update_boss_ai(delta: float) -> void:
 			boss.set_meta("attack_timer", 0.7)
 			boss.scale = Vector3.ONE * 1.82
 			for part in boss.get_children():
-				if part is MeshInstance3D and (bool(part.get_meta("boss_eye", false)) or bool(part.get_meta("boss_crown", false))):
+				if part is MeshInstance3D and (bool(part.get_meta("boss_eye", false)) or bool(part.get_meta("boss_crown", false)) or bool(part.get_meta("boss_tentacle", false))):
 					part.material_override = _glow_material(Color(1.0, 0.025, 0.12))
+				if part is MeshInstance3D and part.mesh is SphereMesh and part.position.y > 2.0:
+					part.material_override = _glow_material(Color(0.55, 0.015, 0.10))
 			_spawn_special_ring(boss.global_position + Vector3(0, 0.15, 0), Color(1.0, 0.025, 0.18), 6.2)
 			_spawn_combat_flash(boss.global_position + Vector3(0, 2.1, 0), Color(0.85, 0.015, 0.16), 4.0)
 		var to_player := player.global_position - boss.global_position
@@ -776,7 +779,12 @@ func _update_boss_ai(delta: float) -> void:
 			var timer := maxf(0.0, float(boss.get_meta("attack_timer", 1.8)) - delta)
 			if timer <= 0.0:
 				boss.set_meta("telegraph_timer", 0.95)
-				_spawn_special_ring(boss.global_position + Vector3(0, 0.14, 0), Color(0.68, 0.08, 0.95), 4.5)
+				_spawn_special_ring(boss.global_position + Vector3(0, 0.14, 0), Color(1.0, 0.025, 0.18) if phase_two else Color(0.68, 0.08, 0.95), 4.5 if not phase_two else 5.8)
+				if phase_two:
+					# Segunda onda da ruptura: o jogador precisa esquivar duas vezes.
+					var followup := create_tween()
+					followup.tween_interval(0.32)
+					followup.tween_callback(_spawn_special_ring.bind(boss.global_position + Vector3(0, 0.18, 0), Color(1.0, 0.12, 0.28), 7.0))
 				timer = 2.6 if not phase_two else 1.8
 			boss.set_meta("attack_timer", timer)
 		_animate_actor(boss, delta, 1.0, 2.8)
