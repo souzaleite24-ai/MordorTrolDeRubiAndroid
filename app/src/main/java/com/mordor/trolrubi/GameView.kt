@@ -6,6 +6,9 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.media.AudioManager
+import android.media.ToneGenerator
+import android.content.SharedPreferences
 import android.util.Log
 import android.view.MotionEvent
 import android.view.View
@@ -44,6 +47,25 @@ class GameView(context: Context) : View(context) {
         orcs.add(Orc(px+cos(a)*r,py+sin(a)*r))
     }
     private var renderError: String? = null
+    private val prefs: SharedPreferences = context.getSharedPreferences("mordor_settings", Context.MODE_PRIVATE)
+    private var settingsOpen = false
+    private var settingsPage = 0
+    private var soundOn = prefs.getBoolean("sound", true)
+    private var musicOn = prefs.getBoolean("music", true)
+    private var effectsOn = prefs.getBoolean("effects", true)
+    private var quality = prefs.getInt("quality", 2).coerceIn(0, 2)
+    private var joystickScale = prefs.getFloat("stick_scale", 1f).coerceIn(.75f, 1.35f)
+    private var buttonScale = prefs.getFloat("button_scale", 1f).coerceIn(.8f, 1.25f)
+    private var sensitivity = prefs.getFloat("sensitivity", 1f).coerceIn(.6f, 1.5f)
+    private var tone: ToneGenerator? = try { ToneGenerator(AudioManager.STREAM_MUSIC, 55) } catch (_: Throwable) { null }
+    private fun saveSettings() {
+        prefs.edit().putBoolean("sound", soundOn).putBoolean("music", musicOn).putBoolean("effects", effectsOn)
+            .putInt("quality", quality).putFloat("stick_scale", joystickScale)
+            .putFloat("button_scale", buttonScale).putFloat("sensitivity", sensitivity).apply()
+    }
+    private fun sfx(type: Int = ToneGenerator.TONE_PROP_BEEP) {
+        if (soundOn && effectsOn) try { tone?.startTone(type, 90) } catch (_: Throwable) {}
+    }
 
     override fun onDraw(c: Canvas) {
         super.onDraw(c)
@@ -110,6 +132,8 @@ class GameView(context: Context) : View(context) {
         text(c,"DIA $day  •  %02d:%02d".format((time/60).toInt()%24,(time%60).toInt()),w-175f,34f,15f,Color.WHITE)
         text(c,"COMPANHEIROS: ${animals.count{it.tame}}",w-220f,58f,13f,Color.GREEN)
         controls(c)
+        drawSettingsButton(c)
+        if(settingsOpen) drawSettings(c)
         if(over){p.color=Color.argb(220,0,0,0);c.drawRect(0f,0f,w,h,p);center(c,"O TROL CAIU",w/2,h/2,34f,Color.WHITE);center(c,"TOQUE PARA RECOMECAR",w/2,h/2+35,18f,Color.YELLOW)}
     }
     private fun drawTroll(c:Canvas){
@@ -122,10 +146,55 @@ class GameView(context: Context) : View(context) {
         if(shield>0){p.color=Color.argb(100,150,210,160);c.drawCircle(x,y-45,80f,p)}
         c.restore()
     }
+    private fun drawSettingsButton(c:Canvas) {
+        val w=width.toFloat()
+        p.color=Color.argb(210,28,25,22);c.drawRoundRect(w-92f,76f,w-20f,126f,10f,10f,p)
+        center(c,"CFG",w-56f,108f,17f,Color.rgb(225,190,115))
+    }
+    private fun drawSettings(c:Canvas) {
+        val w=width.toFloat();val h=height.toFloat()
+        p.color=Color.argb(225,8,9,10);c.drawRect(0f,0f,w,h,p)
+        p.color=Color.rgb(105,65,35);c.drawRoundRect(w*.18f,h*.10f,w*.82f,h*.90f,18f,18f,p)
+        p.color=Color.rgb(24,25,23);c.drawRoundRect(w*.185f,h*.105f,w*.815f,h*.895f,16f,16f,p)
+        center(c,"CRONICAS DE MORDOR",w/2,h*.18f,25f,Color.rgb(220,178,105))
+        center(c,"CONFIGURACOES",w/2,h*.24f,17f,Color.WHITE)
+        listOf("CONTROLES","AUDIO","VIDEO").forEachIndexed { i,label ->
+            val x=w*.25f+i*w*.17f
+            p.color=if(settingsPage==i)Color.rgb(125,75,35) else Color.rgb(48,48,44)
+            c.drawRoundRect(x,h*.29f,x+w*.15f,h*.37f,8f,8f,p)
+            center(c,label,x+w*.075f,h*.34f,12f,Color.WHITE)
+        }
+        val rows=when(settingsPage){
+            0->listOf("Tamanho joystick: "+(joystickScale*100).toInt()+"%","Tamanho botoes: "+(buttonScale*100).toInt()+"%","Sensibilidade: "+(sensitivity*100).toInt()+"%")
+            1->listOf("Audio geral: "+(if(soundOn)"LIGADO" else "DESLIGADO"),"Efeitos: "+(if(effectsOn)"LIGADOS" else "DESLIGADOS"),"Musica: "+(if(musicOn)"LIGADA" else "DESLIGADA"))
+            else->listOf("Qualidade: "+listOf("BAIXA","MEDIA","ALTA")[quality],"Efeitos visuais: "+(if(quality>0)"LIGADOS" else "REDUZIDOS"),"Desempenho: "+(if(quality==0)"MAXIMO FPS" else "EQUILIBRADO"))
+        }
+        rows.forEachIndexed { i,label ->
+            val y=h*.47f+i*h*.105f
+            p.color=Color.rgb(45,44,39);c.drawRoundRect(w*.25f,y-25f,w*.75f,y+20f,8f,8f,p)
+            text(c,label,w*.28f,y+6f,15f,Color.WHITE)
+            center(c,if(settingsPage==0)"−       +" else "ALTERAR",w*.69f,y+6f,14f,Color.rgb(230,190,120))
+        }
+        p.color=Color.rgb(110,55,35);c.drawRoundRect(w*.40f,h*.82f,w*.60f,h*.88f,8f,8f,p)
+        center(c,"VOLTAR AO JOGO",w/2,h*.86f,13f,Color.WHITE)
+    }
+    private fun adjustSetting(row:Int,direction:Int) {
+        when(settingsPage) {
+            0 -> when(row) {
+                0 -> joystickScale=(joystickScale+direction*.1f).coerceIn(.75f,1.35f)
+                1 -> buttonScale=(buttonScale+direction*.1f).coerceIn(.8f,1.25f)
+                2 -> sensitivity=(sensitivity+direction*.1f).coerceIn(.6f,1.5f)
+            }
+            1 -> when(row) { 0->soundOn=!soundOn;1->effectsOn=!effectsOn;2->musicOn=!musicOn }
+            else -> quality=(quality+1)%3
+        }
+        saveSettings();sfx()
+    }
     private fun controls(c:Canvas){
         val w=width.toFloat();val h=height.toFloat()
-        p.color=Color.argb(90,220,225,220);c.drawCircle(100f,h-100f,70f,p)
-        p.color=Color.WHITE;c.drawCircle(100f+sx*40,h-100f+sy*40,25f,p)
+        val stickR=70f*joystickScale
+        p.color=Color.argb(90,220,225,220);c.drawCircle(100f,h-100f,stickR,p)
+        p.color=Color.WHITE;c.drawCircle(100f+sx*40f*joystickScale,h-100f+sy*40f*joystickScale,25f*joystickScale,p)
         val labels=listOf("PULAR","ABAIXAR","DEFENDER","ATACAR","ADESTRAR","ESQUIVA")
         labels.forEachIndexed{i,s->
             val x=w-250f+(i%3)*82f;val y=h-130f+(i/3)*62f
@@ -143,16 +212,26 @@ class GameView(context: Context) : View(context) {
             MotionEvent.ACTION_DOWN,MotionEvent.ACTION_POINTER_DOWN->{
                 val i=e.actionIndex;val x=e.getX(i);val y=e.getY(i)
                 if(over){reset();return true}
+                if(settingsOpen) {
+                    if(y>=h*.29f && y<=h*.37f) settingsPage=when { x<w*.42f->0; x<w*.59f->1; else->2 }
+                    else if(y>=h*.82f && y<=h*.90f) { settingsOpen=false;saveSettings() }
+                    else if(y>=h*.43f && y<=h*.75f) {
+                        val row=((y-h*.43f)/(h*.105f)).toInt().coerceIn(0,2)
+                        adjustSetting(row,if(settingsPage==0 && x<w*.5f) -1 else 1)
+                    }
+                    return true
+                }
+                if(x>w-105f && y<145f){settingsOpen=true;settingsPage=0;sfx();return true}
                 if(x<w*.34f&&y>h*.55f){pointer=e.getPointerId(i);stick(x,y);return true}
                 val col=((x-(w-250f))/82f).toInt();val row=((y-(h-130f))/62f).toInt()
                 if(col in 0..2&&row in 0..1)when(row*3+col){
-                    0->leap=.6f;1->crouch=!crouch;2->shield=.7f;3->{attack=.3f;val o=orcs.minByOrNull{hypot(it.x-px,it.y-py)};if(o!=null&&hypot(o.x-px,o.y-py)<140f)o.hp--};4->animals.filter{!it.tame}.minByOrNull{hypot(it.x-px,it.y-py)}?.let{if(hypot(it.x-px,it.y-py)<160f)it.tame=true};5->dash=.4f
+                    0->{leap=.6f;sfx(ToneGenerator.TONE_PROP_ACK)};1->{crouch=!crouch;sfx()};2->{shield=.7f;sfx(ToneGenerator.TONE_PROP_NACK)};3->{attack=.3f;sfx(ToneGenerator.TONE_PROP_ACK);val o=orcs.minByOrNull{hypot(it.x-px,it.y-py)};if(o!=null&&hypot(o.x-px,o.y-py)<140f)o.hp--};4->{animals.filter{!it.tame}.minByOrNull{hypot(it.x-px,it.y-py)}?.let{if(hypot(it.x-px,it.y-py)<160f)it.tame=true};sfx()};5->{dash=.4f;sfx()}
                 }
             }
             MotionEvent.ACTION_MOVE->{for(i in 0 until e.pointerCount)if(e.getPointerId(i)==pointer)stick(e.getX(i),e.getY(i))}
             MotionEvent.ACTION_UP,MotionEvent.ACTION_POINTER_UP,MotionEvent.ACTION_CANCEL->{if(e.getPointerId(e.actionIndex)==pointer){pointer=-1;sx=0f;sy=0f}}
         };return true
     }
-    private fun stick(x:Float,y:Float){sx=((x-100f)/70f).coerceIn(-1f,1f);sy=((y-(height-100f))/70f).coerceIn(-1f,1f)}
+    private fun stick(x:Float,y:Float){sx=(((x-100f)/(70f*joystickScale))*sensitivity).coerceIn(-1f,1f);sy=(((y-(height-100f))/(70f*joystickScale))*sensitivity).coerceIn(-1f,1f)}
     private fun reset(){hp=100f;px=0f;py=0f;kills=0;over=false;orcs.clear();repeat(6){spawn()};animals.forEach{it.tame=false}}
 }
