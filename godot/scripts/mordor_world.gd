@@ -55,6 +55,8 @@ var npc_node: Node3D
 var shop_panel: PanelContainer
 var shop_label: Label
 var shop_buttons: Dictionary = {}
+var pause_panel: PanelContainer
+var pause_button: Button
 var ash_shards := 0
 var shop_damage_bonus := 0.0
 var shop_health_bonus := 0.0
@@ -812,10 +814,52 @@ func _create_hud() -> void:
 			move_button.button_up.connect(Input.action_release.bind(direction))
 			move_button.mouse_exited.connect(_release_direction.bind(direction))
 		dpad.add_child(move_button)
+	pause_button = Button.new()
+	pause_button.text = "Ⅱ PAUSAR"
+	pause_button.anchor_left = 1.0
+	pause_button.anchor_right = 1.0
+	pause_button.offset_left = -142
+	pause_button.offset_right = -18
+	pause_button.offset_top = 18
+	pause_button.offset_bottom = 62
+	pause_button.pressed.connect(_toggle_pause)
+	layer.add_child(pause_button)
+	pause_panel = PanelContainer.new()
+	pause_panel.anchor_left = 0.32
+	pause_panel.anchor_right = 0.68
+	pause_panel.anchor_top = 0.28
+	pause_panel.anchor_bottom = 0.72
+	pause_panel.visible = false
+	pause_panel.process_mode = Node.PROCESS_MODE_ALWAYS
+	layer.add_child(pause_panel)
+	var pause_box := VBoxContainer.new()
+	pause_panel.add_child(pause_box)
+	var pause_title := Label.new()
+	pause_title.text = "JOGO PAUSADO"
+	pause_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pause_title.add_theme_font_size_override("font_size", 24)
+	pause_box.add_child(pause_title)
+	var resume_button := Button.new()
+	resume_button.text = "CONTINUAR"
+	resume_button.custom_minimum_size.y = 52
+	resume_button.pressed.connect(_toggle_pause)
+	pause_box.add_child(resume_button)
+	var save_button := Button.new()
+	save_button.text = "SALVAR PROGRESSO"
+	save_button.custom_minimum_size.y = 46
+	save_button.pressed.connect(_save_progress)
+	pause_box.add_child(save_button)
 	var hint := Label.new()
 	hint.text = "WASD / setas: mover   •   toque: botões   •   toque em ORDEM para comandar a horda"
 	hint.position = Vector2(18, 116)
 	layer.add_child(hint)
+
+func _toggle_pause() -> void:
+	var should_pause := not get_tree().paused
+	get_tree().paused = should_pause
+	pause_panel.visible = should_pause
+	if pause_button:
+		pause_button.text = "▶ RETOMAR" if should_pause else "Ⅱ PAUSAR"
 
 func _release_direction(action: String) -> void:
 	Input.action_release(action)
@@ -1301,6 +1345,8 @@ func _update_status() -> void:
 	_update_shop()
 
 func _physics_process(delta: float) -> void:
+	if get_tree().paused:
+		return
 	if is_instance_valid(player) and is_instance_valid(npc_node):
 		npc_nearby = player.global_position.distance_to(npc_node.global_position) <= 3.2
 		if Input.is_action_just_pressed("interact") and npc_nearby:
