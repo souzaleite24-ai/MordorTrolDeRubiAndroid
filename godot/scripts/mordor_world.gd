@@ -26,6 +26,8 @@ var player_health := 100.0
 var player_hit_cooldown := 0.0
 var wave := 1
 var anim_clock := 0.0
+var boss_health_bar: ProgressBar
+var boss_name_label: Label
 
 func _ready() -> void:
 	_setup_input()
@@ -320,6 +322,100 @@ func _create_enemy(at: Vector3) -> void:
 	add_child(enemy)
 	enemies.append(enemy)
 
+
+func _create_boss(at: Vector3) -> void:
+	var boss := Node3D.new()
+	boss.name = "Nekravor_TiranoAbissal"
+	boss.position = at
+	boss.scale = Vector3.ONE * 1.55
+	boss.set_meta("is_boss", true)
+	boss.set_meta("health", 720.0)
+	boss.set_meta("attack_timer", 1.8)
+	boss.set_meta("telegraph_timer", 0.0)
+	boss.set_meta("phase_two", false)
+	var bone := StandardMaterial3D.new()
+	bone.albedo_color = Color(0.72, 0.70, 0.58)
+	var abyss := StandardMaterial3D.new()
+	abyss.albedo_color = Color(0.035, 0.045, 0.075)
+	abyss.metallic = 0.72
+	abyss.roughness = 0.3
+	var violet := _glow_material(Color(0.48, 0.06, 0.82))
+	var torso := MeshInstance3D.new()
+	var torso_mesh := CapsuleMesh.new()
+	torso_mesh.radius = 0.72
+	torso_mesh.height = 2.7
+	torso.mesh = torso_mesh
+	torso.position.y = 1.55
+	torso.material_override = abyss
+	boss.add_child(torso)
+	var skull := MeshInstance3D.new()
+	var skull_mesh := SphereMesh.new()
+	skull_mesh.radius = 0.72
+	skull_mesh.height = 1.12
+	skull.mesh = skull_mesh
+	skull.position = Vector3(0, 3.05, -0.16)
+	skull.scale = Vector3(1.0, 1.08, 0.82)
+	skull.material_override = bone
+	boss.add_child(skull)
+	var jaw := MeshInstance3D.new()
+	var jaw_mesh := BoxMesh.new()
+	jaw_mesh.size = Vector3(0.88, 0.28, 0.68)
+	jaw.mesh = jaw_mesh
+	jaw.position = Vector3(0, 2.55, -0.32)
+	jaw.material_override = bone
+	boss.add_child(jaw)
+	for side in [-1.0, 1.0]:
+		var eye := MeshInstance3D.new()
+		var eye_mesh := SphereMesh.new()
+		eye_mesh.radius = 0.13
+		eye_mesh.height = 0.22
+		eye.mesh = eye_mesh
+		eye.position = Vector3(side * 0.29, 3.13, -0.77)
+		eye.material_override = violet
+		boss.add_child(eye)
+		var horn := MeshInstance3D.new()
+		var horn_mesh := CylinderMesh.new()
+		horn_mesh.top_radius = 0.015
+		horn_mesh.bottom_radius = 0.18
+		horn_mesh.height = 0.92
+		horn.mesh = horn_mesh
+		horn.position = Vector3(side * 0.56, 3.68, -0.05)
+		horn.rotation.z = side * -0.48
+		horn.material_override = bone
+		boss.add_child(horn)
+		var shoulder := MeshInstance3D.new()
+		var shoulder_mesh := SphereMesh.new()
+		shoulder_mesh.radius = 0.52
+		shoulder_mesh.height = 0.72
+		shoulder.mesh = shoulder_mesh
+		shoulder.position = Vector3(side * 0.9, 2.35, 0)
+		shoulder.material_override = abyss
+		boss.add_child(shoulder)
+		for segment in range(3):
+			var tentacle := MeshInstance3D.new()
+			var tentacle_mesh := CylinderMesh.new()
+			tentacle_mesh.top_radius = 0.055
+			tentacle_mesh.bottom_radius = 0.16 - segment * 0.025
+			tentacle_mesh.height = 0.72
+			tentacle.mesh = tentacle_mesh
+			tentacle.position = Vector3(side * (0.42 + segment * 0.17), 2.2 - segment * 0.48, -0.38)
+			tentacle.rotation.z = side * (0.55 + segment * 0.22)
+			tentacle.material_override = abyss
+			boss.add_child(tentacle)
+	var crown := MeshInstance3D.new()
+	var crown_mesh := TorusMesh.new()
+	crown_mesh.inner_radius = 0.55
+	crown_mesh.outer_radius = 0.68
+	crown.mesh = crown_mesh
+	crown.position.y = 3.63
+	crown.rotation.x = deg_to_rad(90)
+	crown.material_override = violet
+	boss.add_child(crown)
+	add_child(boss)
+	enemies.append(boss)
+	_spawn_special_ring(at + Vector3(0, 0.12, 0), Color(0.48, 0.06, 0.82), 4.8)
+	_update_boss_hud()
+
 func _create_hud() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -335,6 +431,16 @@ func _create_hud() -> void:
 	vbox.add_child(title)
 	status_label = Label.new()
 	vbox.add_child(status_label)
+	boss_name_label = Label.new()
+	boss_name_label.text = "NEKRAVOR — O TIRANO ABISSAL"
+	boss_name_label.visible = false
+	vbox.add_child(boss_name_label)
+	boss_health_bar = ProgressBar.new()
+	boss_health_bar.custom_minimum_size = Vector2(280, 14)
+	boss_health_bar.max_value = 720.0
+	boss_health_bar.value = 720.0
+	boss_health_bar.visible = false
+	vbox.add_child(boss_health_bar)
 	var controls := HBoxContainer.new()
 	controls.anchor_left = 0.0
 	controls.anchor_top = 1.0
@@ -401,13 +507,25 @@ func _damage_enemy(enemy: Node3D, amount: float) -> void:
 	enemy.set_meta("health", hp)
 	if hp <= 0.0:
 		var at := enemy.global_position
+		var defeated_boss := bool(enemy.get_meta("is_boss", false))
 		enemies.erase(enemy)
 		enemy.queue_free()
+		if defeated_boss:
+			_spawn_special_ring(at + Vector3(0, 0.15, 0), Color(0.72, 0.32, 1.0), 7.0)
+			if boss_name_label:
+				boss_name_label.visible = false
+			if boss_health_bar:
+				boss_health_bar.visible = false
 		if enemies.is_empty():
 			wave += 1
-			for i in range(mini(wave, 4)):
-				_create_enemy(at + Vector3(randf_range(-5, 5), 0, randf_range(-7, -3)))
+			if wave % 3 == 0:
+				_create_boss(at + Vector3(0, 0, -7))
+			else:
+				for i in range(mini(wave, 4)):
+					_create_enemy(at + Vector3(randf_range(-5, 5), 0, randf_range(-7, -3)))
 		_update_status()
+	else:
+		_update_boss_hud()
 
 func _spawn_combat_flash(at: Vector3, tint: Color, radius: float) -> void:
 	var flash := MeshInstance3D.new()
@@ -606,10 +724,57 @@ func _update_minion_combat(delta: float) -> void:
 			timer = 0.9 if kind != "ASSASSINO" else 0.55
 		minion.set_meta("attack_timer", timer)
 
+
+func _update_boss_hud() -> void:
+	if not boss_health_bar or not boss_name_label:
+		return
+	for enemy in enemies:
+		if is_instance_valid(enemy) and bool(enemy.get_meta("is_boss", false)):
+			boss_name_label.visible = true
+			boss_health_bar.visible = true
+			boss_health_bar.value = float(enemy.get_meta("health", 720.0))
+			return
+	boss_name_label.visible = false
+	boss_health_bar.visible = false
+
+func _update_boss_ai(delta: float) -> void:
+	for boss in enemies:
+		if not is_instance_valid(boss) or not bool(boss.get_meta("is_boss", false)):
+			continue
+		var hp := float(boss.get_meta("health", 720.0))
+		var phase_two := hp <= 360.0
+		if phase_two and not bool(boss.get_meta("phase_two", false)):
+			boss.set_meta("phase_two", true)
+			boss.set_meta("attack_timer", 0.7)
+			_spawn_special_ring(boss.global_position + Vector3(0, 0.15, 0), Color(0.78, 0.08, 0.95), 5.5)
+		var to_player := player.global_position - boss.global_position
+		to_player.y = 0.0
+		var distance := to_player.length()
+		if distance > 3.2:
+			boss.global_position += to_player.normalized() * (1.15 if not phase_two else 1.75) * delta
+			boss.look_at(Vector3(player.global_position.x, boss.global_position.y, player.global_position.z), Vector3.UP)
+		var telegraph := float(boss.get_meta("telegraph_timer", 0.0))
+		if telegraph > 0.0:
+			telegraph = maxf(0.0, telegraph - delta)
+			boss.set_meta("telegraph_timer", telegraph)
+			if telegraph <= 0.0 and distance < (4.8 if phase_two else 4.2) and dodge_time <= 0.0:
+				player_health = maxf(0.0, player_health - (18.0 if phase_two else 13.0) * (0.35 if guarding else 1.0))
+				_spawn_combat_flash(player.global_position + Vector3(0, 1.0, 0), Color(0.72, 0.08, 1.0), 2.3)
+				_update_status()
+		elif distance < 5.2:
+			var timer := maxf(0.0, float(boss.get_meta("attack_timer", 1.8)) - delta)
+			if timer <= 0.0:
+				boss.set_meta("telegraph_timer", 0.95)
+				_spawn_special_ring(boss.global_position + Vector3(0, 0.14, 0), Color(0.68, 0.08, 0.95), 4.5)
+				timer = 2.6 if not phase_two else 1.8
+			boss.set_meta("attack_timer", timer)
+		_animate_actor(boss, delta, 1.0, 2.8)
+	_update_boss_hud()
+
 func _update_enemy_ai(delta: float) -> void:
 	player_hit_cooldown = maxf(0.0, player_hit_cooldown - delta)
 	for enemy in enemies:
-		if not is_instance_valid(enemy):
+		if not is_instance_valid(enemy) or bool(enemy.get_meta("is_boss", false)):
 			continue
 		var to_player := player.global_position - enemy.global_position
 		to_player.y = 0.0
@@ -655,6 +820,7 @@ func _physics_process(delta: float) -> void:
 	camera.global_position = camera.global_position.lerp(player.global_position + Vector3(0, 5.2, 9), 5.0 * delta)
 	camera.look_at(player.global_position + Vector3(0, 1, -3), Vector3.UP)
 	_update_enemy_ai(delta)
+	_update_boss_ai(delta)
 	_update_minion_combat(delta)
 	for i in range(minions.size()):
 		var minion := minions[i]
