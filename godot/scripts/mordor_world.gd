@@ -797,32 +797,43 @@ func _create_hud() -> void:
 	close_dialog.text = "FECHAR"
 	close_dialog.pressed.connect(func(): npc_dialog_panel.visible = false)
 	dialog_box.add_child(close_dialog)
-	var controls := HBoxContainer.new()
-	controls.anchor_left = 0.0
+	# Controles em duas fileiras: botões maiores, com espaço entre eles.
+	# A área de ações começa após o direcional para não sobrepor os comandos.
+	var controls := GridContainer.new()
+	controls.columns = 4
+	controls.anchor_left = 0.22
 	controls.anchor_top = 1.0
 	controls.anchor_right = 1.0
 	controls.anchor_bottom = 1.0
-	controls.offset_top = -76
-	controls.offset_bottom = -12
+	controls.offset_left = 8
+	controls.offset_top = -166
+	controls.offset_right = -18
+	controls.offset_bottom = -14
+	controls.add_theme_constant_override("h_separation", 12)
+	controls.add_theme_constant_override("v_separation", 12)
 	layer.add_child(controls)
 	for action in ["ATACAR", "ESPECIAL", "ESQUIVA", "DEFESA", "ORDEN", "CLASSE", "INVENTARIO", "FALAR"]:
 		var button := Button.new()
 		button.text = action
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.custom_minimum_size.y = 58
+		button.custom_minimum_size = Vector2(0, 68)
+		button.add_theme_font_size_override("font_size", 17)
 		button.pressed.connect(_on_control.bind("TALK" if action == "FALAR" else action))
 		controls.add_child(button)
 	var dpad := GridContainer.new()
 	dpad.columns = 3
-	dpad.position = Vector2(20, -205)
+	dpad.position = Vector2(22, -232)
 	dpad.anchor_top = 1.0
 	dpad.anchor_bottom = 1.0
-	dpad.custom_minimum_size = Vector2(174, 174)
+	dpad.custom_minimum_size = Vector2(210, 210)
+	dpad.add_theme_constant_override("h_separation", 8)
+	dpad.add_theme_constant_override("v_separation", 8)
 	layer.add_child(dpad)
 	for direction in ["", "ui_up", "", "ui_left", "", "ui_right", "", "ui_down", ""]:
 		var move_button := Button.new()
 		move_button.text = "▲" if direction == "ui_up" else ("▼" if direction == "ui_down" else ("◀" if direction == "ui_left" else ("▶" if direction == "ui_right" else "")))
-		move_button.custom_minimum_size = Vector2(54, 54)
+		move_button.custom_minimum_size = Vector2(64, 64)
+		move_button.add_theme_font_size_override("font_size", 24)
 		move_button.disabled = direction == ""
 		if direction != "":
 			move_button.button_down.connect(Input.action_press.bind(direction))
@@ -833,10 +844,11 @@ func _create_hud() -> void:
 	pause_button.text = "Ⅱ PAUSAR"
 	pause_button.anchor_left = 1.0
 	pause_button.anchor_right = 1.0
-	pause_button.offset_left = -142
+	pause_button.offset_left = -174
 	pause_button.offset_right = -18
 	pause_button.offset_top = 18
-	pause_button.offset_bottom = 62
+	pause_button.offset_bottom = 74
+	pause_button.add_theme_font_size_override("font_size", 17)
 	pause_button.pressed.connect(_toggle_pause)
 	layer.add_child(pause_button)
 	pause_panel = PanelContainer.new()
