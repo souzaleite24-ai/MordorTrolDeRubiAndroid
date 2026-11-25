@@ -302,6 +302,55 @@ func _make_actor(color: Color, height: float = 1.8) -> Node3D:
 	head.material_override = material
 	actor.add_child(head)
 
+	# Rosto legível à distância: órbitas, olhos emissivos, nariz e máscara mandibular.
+	var face_dark := StandardMaterial3D.new()
+	face_dark.albedo_color = Color(0.018, 0.012, 0.016)
+	face_dark.roughness = 0.48
+	var eye_glow := _glow_material(Color(0.95, 0.035, 0.018))
+	var face_gold := StandardMaterial3D.new()
+	face_gold.albedo_color = Color(0.42, 0.22, 0.075)
+	face_gold.metallic = 0.78
+	face_gold.roughness = 0.3
+	for side in [-1.0, 1.0]:
+		var socket := MeshInstance3D.new()
+		var socket_mesh := SphereMesh.new()
+		socket_mesh.radius = 0.083
+		socket_mesh.height = 0.12
+		socket.mesh = socket_mesh
+		socket.position = Vector3(side * 0.115, height * 0.895, -0.226)
+		socket.material_override = face_dark
+		actor.add_child(socket)
+		var eye := MeshInstance3D.new()
+		var eye_mesh := SphereMesh.new()
+		eye_mesh.radius = 0.044
+		eye_mesh.height = 0.07
+		eye.mesh = eye_mesh
+		eye.position = Vector3(side * 0.115, height * 0.895, -0.286)
+		eye.material_override = eye_glow
+		actor.add_child(eye)
+		var cheek := MeshInstance3D.new()
+		var cheek_mesh := BoxMesh.new()
+		cheek_mesh.size = Vector3(0.16, 0.13, 0.075)
+		cheek.mesh = cheek_mesh
+		cheek.position = Vector3(side * 0.17, height * 0.79, -0.205)
+		cheek.material_override = dark_metal
+		actor.add_child(cheek)
+
+	var nose := MeshInstance3D.new()
+	var nose_mesh := PrismMesh.new()
+	nose_mesh.size = Vector3(0.12, 0.19, 0.12)
+	nose.mesh = nose_mesh
+	nose.position = Vector3(0, height * 0.835, -0.265)
+	nose.material_override = face_gold
+	actor.add_child(nose)
+	var jaw := MeshInstance3D.new()
+	var jaw_mesh := BoxMesh.new()
+	jaw_mesh.size = Vector3(0.29, 0.095, 0.12)
+	jaw.mesh = jaw_mesh
+	jaw.position = Vector3(0, height * 0.775, -0.22)
+	jaw.material_override = dark_metal
+	actor.add_child(jaw)
+
 	# Ombreiras, braçadeiras e elmo dão uma silhueta distinta sem assets externos.
 	for side in [-1.0, 1.0]:
 		var shoulder := MeshInstance3D.new()
