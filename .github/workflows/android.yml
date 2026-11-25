@@ -1,0 +1,50 @@
+
+name: Compilar APK Android
+
+on:
+  workflow_dispatch:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar Android 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Extrair projeto
+        run: |
+          unzip -q MordorTrolDeRubi_CompilacaoNaNuvem.zip -d buildsrc
+
+      - name: Compilar APK
+        working-directory: buildsrc/MordorTrolDeRubiAndroid
+        run: gradle --no-daemon assembleDebug
+
+      - name: Disponibilizar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mordor-Trol-de-Rubi-APK
+          path: buildsrc/MordorTrolDeRubiAndroid/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+  
