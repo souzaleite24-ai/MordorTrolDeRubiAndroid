@@ -72,7 +72,7 @@ jobs:
       - name: Verify project scripts
         run: godot --headless --path godot --quit-after 3
       - name: Export Android debug APK
-        run: godot --headless --path godot --export-debug "Android" godot/build/Mordor3D-debug.apk
+        run: godot --verbose --headless --path godot --export-debug "Android" godot/build/Mordor3D-debug.apk
       - name: Verify APK artifact
         run: test -s godot/build/Mordor3D-debug.apk
       - name: Upload test APK
