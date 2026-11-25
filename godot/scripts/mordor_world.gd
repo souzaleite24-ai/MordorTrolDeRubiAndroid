@@ -16,6 +16,12 @@ var selected_class := "BRUTAMONTES"
 var status_label: Label
 var attack_cooldown := 0.0
 var special_cooldown := 0.0
+var dodge_cooldown := 0.0
+var dodge_time := 0.0
+var dodge_direction := Vector3.ZERO
+var guarding := false
+var combo_step := 0
+var combo_window := 0.0
 var player_health := 100.0
 var player_hit_cooldown := 0.0
 var wave := 1
@@ -337,7 +343,7 @@ func _create_hud() -> void:
 	controls.offset_top = -76
 	controls.offset_bottom = -12
 	layer.add_child(controls)
-	for action in ["ATACAR", "ESPECIAL", "ORDEN", "CLASSE"]:
+	for action in ["ATACAR", "ESPECIAL", "ESQUIVA", "DEFESA", "ORDEN", "CLASSE"]:
 		var button := Button.new()
 		button.text = action
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -375,6 +381,11 @@ func _on_control(action: String) -> void:
 			_attack()
 		"ESPECIAL":
 			_cast_spell()
+		"ESQUIVA":
+			_dodge()
+		"DEFESA":
+			guarding = not guarding
+			_update_status()
 		"ORDEN":
 			selected_order = "ATACAR" if selected_order == "SEGUIR" else "SEGUIR"
 			_update_status()
@@ -437,14 +448,30 @@ func _animate_actor(actor: Node3D, delta: float, speed: float, phase: float) -> 
 func _attack() -> void:
 	if attack_cooldown > 0.0:
 		return
-	attack_cooldown = 0.55
+	attack_cooldown = 0.32
+	combo_step = (combo_step % 3) + 1
+	combo_window = 0.85
 	_weapon_strike(player.get_child(0) as Node3D)
-	_spawn_combat_flash(player.global_position + player.global_basis * Vector3(0, 1.1, -1.35), Color(1.0, 0.58, 0.16), 2.8)
+	_spawn_combat_flash(player.global_position + player.global_basis * Vector3(0, 1.1, -1.35), Color(1.0, 0.58, 0.16), 2.8 + combo_step * 0.22)
 	for enemy in enemies:
 		if is_instance_valid(enemy) and player.global_position.distance_to(enemy.global_position) < 4.0:
 			_spawn_combat_flash(enemy.global_position + Vector3(0, 1.0, 0), Color(1.0, 0.25, 0.08), 1.7)
-			_damage_enemy(enemy, 42.0)
+			_damage_enemy(enemy, 24.0 + combo_step * 9.0)
+			if combo_step == 3:
+				_spawn_special_ring(enemy.global_position + Vector3(0, 0.15, 0), Color(1.0, 0.52, 0.12), 1.9)
 			break
+
+func _dodge() -> void:
+	if dodge_cooldown > 0.0:
+		return
+	var input := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	dodge_direction = Vector3(input.x, 0, input.y)
+	if dodge_direction.length() < 0.1:
+		dodge_direction = -player.global_basis.z
+	dodge_direction = dodge_direction.normalized()
+	dodge_time = 0.22
+	dodge_cooldown = 1.1
+	_spawn_special_ring(player.global_position + Vector3(0, 0.12, 0), Color(0.55, 0.55, 0.62), 1.45)
 
 func _weapon_strike(actor: Node3D) -> void:
 	var pivot := actor.get_node_or_null("WeaponPivot") as Node3D
@@ -590,8 +617,9 @@ func _update_enemy_ai(delta: float) -> void:
 		if distance > 1.7:
 			enemy.global_position += to_player.normalized() * 1.6 * delta
 			enemy.look_at(Vector3(player.global_position.x, enemy.global_position.y, player.global_position.z), Vector3.UP)
-		elif player_hit_cooldown <= 0.0:
-			player_health = maxf(0.0, player_health - 8.0)
+		elif player_hit_cooldown <= 0.0 and dodge_time <= 0.0:
+			var incoming_damage := 2.0 if guarding else 8.0
+			player_health = maxf(0.0, player_health - incoming_damage)
 			_spawn_combat_flash(player.global_position + Vector3(0, 1.0, 0), Color(0.9, 0.03, 0.02), 1.4)
 			player_hit_cooldown = 1.0
 			_update_status()
@@ -603,6 +631,11 @@ func _update_status() -> void:
 func _physics_process(delta: float) -> void:
 	anim_clock += delta
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)
+	dodge_cooldown = maxf(0.0, dodge_cooldown - delta)
+	dodge_time = maxf(0.0, dodge_time - delta)
+	combo_window = maxf(0.0, combo_window - delta)
+	if combo_window <= 0.0:
+		combo_step = 0
 	special_cooldown = maxf(0.0, special_cooldown - delta)
 	var input := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 	var direction := Vector3(input.x, 0, input.y)
@@ -610,6 +643,9 @@ func _physics_process(delta: float) -> void:
 		player.rotation.y = lerp_angle(player.rotation.y, atan2(-direction.x, -direction.z), 10.0 * delta)
 	player.velocity.x = direction.x * 6.0
 	player.velocity.z = direction.z * 6.0
+	if dodge_time > 0.0:
+		player.velocity.x = dodge_direction.x * 15.0
+		player.velocity.z = dodge_direction.z * 15.0
 	if not player.is_on_floor():
 		player.velocity.y -= 22.0 * delta
 	else:
