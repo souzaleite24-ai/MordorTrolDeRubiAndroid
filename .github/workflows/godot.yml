@@ -74,7 +74,7 @@ jobs:
       - name: Export Android debug APK
         run: |
           mkdir -p godot/build
-          godot --verbose --headless --path godot --export-debug "Android" godot/build/Mordor3D-debug.apk
+          godot --verbose --headless --path godot --export-debug "Android" build/Mordor3D-debug.apk
       - name: Verify APK artifact
         run: test -s godot/build/Mordor3D-debug.apk
       - name: Upload test APK
