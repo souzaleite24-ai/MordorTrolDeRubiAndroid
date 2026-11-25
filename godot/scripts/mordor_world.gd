@@ -35,6 +35,8 @@ var relic_count := 0
 var relic_damage_bonus := 0.0
 var inventory_panel: PanelContainer
 var inventory_label: Label
+var inventory_buttons: Dictionary = {}
+var equipment_tiers: Dictionary = {"BRUTAMONTES": 0, "ASSASSINO": 0, "PIROMANTE": 0, "XAMA": 0}
 
 func _ready() -> void:
 	_setup_input()
@@ -316,6 +318,8 @@ func _create_minions() -> void:
 		_add_weapon(minion, classes[i])
 		minion.name = classes[i]
 		minion.set_meta("class", classes[i])
+		minion.set_meta("equipment_tier", 0)
+		minion.set_meta("attack_timer", 0.0)
 		minion.position = Vector3((i - 1.5) * 1.7, 0, 6.5)
 		add_child(minion)
 		minions.append(minion)
@@ -547,10 +551,19 @@ func _create_hud() -> void:
 	inventory_panel.custom_minimum_size = Vector2(290, 170)
 	inventory_panel.visible = false
 	layer.add_child(inventory_panel)
+	var inventory_box := VBoxContainer.new()
+	inventory_panel.add_child(inventory_box)
 	inventory_label = Label.new()
 	inventory_label.text = _inventory_text()
 	inventory_label.add_theme_font_size_override("font_size", 14)
-	inventory_panel.add_child(inventory_label)
+	inventory_box.add_child(inventory_label)
+	for kind in ["BRUTAMONTES", "ASSASSINO", "PIROMANTE", "XAMA"]:
+		var equip_button := Button.new()
+		equip_button.custom_minimum_size.y = 38
+		equip_button.pressed.connect(_cycle_equipment.bind(kind))
+		inventory_box.add_child(equip_button)
+		inventory_buttons[kind] = equip_button
+	_update_inventory()
 	var controls := HBoxContainer.new()
 	controls.anchor_left = 0.0
 	controls.anchor_top = 1.0
@@ -685,12 +698,33 @@ func _upgrade_minion_relics() -> void:
 		halo_node.material_override = glow
 		halo_node.scale = Vector3.ONE * (1.0 + float(relic_count - 1) * 0.12)
 
+
+func _equipment_damage_multiplier(kind: String) -> float:
+	var tier := int(equipment_tiers.get(kind, 0))
+	return [1.0, 1.18, 1.38, 1.65][clampi(tier, 0, 3)]
+
+func _cycle_equipment(kind: String) -> void:
+	var max_unlocked := mini(relic_count, 3)
+	var current := int(equipment_tiers.get(kind, 0))
+	equipment_tiers[kind] = 0 if current >= max_unlocked else current + 1
+	for minion in minions:
+		if is_instance_valid(minion) and String(minion.get_meta("class", "")) == kind:
+			minion.set_meta("equipment_tier", int(equipment_tiers[kind]))
+	_update_inventory()
+
 func _inventory_text() -> String:
-	return "INVENTÁRIO ABISSAL\nRelíquias: %d\nDano total: +%d%%\nVida máxima: 100  |  Cura por chefe: +30\n\nBRUTAMONTES — Martelo do Núcleo\nASSASSINO — Gêmeas do Eclipse\nPIROMANTE — Orbe da Chama\nXAMÃ — Totem da Aurora" % [relic_count, int(relic_damage_bonus * 100.0)]
+	return "INVENTÁRIO ABISSAL\nRelíquias: %d  |  Dano global: +%d%%\nEquipamentos aprimorados causam mais dano e atacam mais rápido.\nCada relíquia libera um nível (máx. 3)." % [relic_count, int(relic_damage_bonus * 100.0)]
 
 func _update_inventory() -> void:
 	if inventory_label:
 		inventory_label.text = _inventory_text()
+	for kind in inventory_buttons:
+		var tier := int(equipment_tiers.get(kind, 0))
+		var max_unlocked := mini(relic_count, 3)
+		var weapon_name := {"BRUTAMONTES": "Martelo do Núcleo", "ASSASSINO": "Gêmeas do Eclipse", "PIROMANTE": "Orbe da Chama", "XAMA": "Totem da Aurora"}[kind]
+		var button := inventory_buttons[kind] as Button
+		button.text = "%s — %s  |  Nível %d/%d (+%d%% dano)" % [kind, weapon_name, tier, max_unlocked, int((_equipment_damage_multiplier(kind) - 1.0) * 100.0)]
+		button.disabled = max_unlocked == 0
 
 func _show_relic_reward() -> void:
 	if not boss_intro_label:
@@ -755,10 +789,10 @@ func _attack() -> void:
 				_spawn_special_ring(enemy.global_position + Vector3(0, 0.15, 0), Color(1.0, 0.52, 0.12), 1.9)
 			break
 
+
 func _dodge() -> void:
-	if dodge_cooldown > 0.0:
+	if dodge_cooldown > 0.0 or boss_intro_timer > 0.0:
 		return
-	boss_intro_timer = maxf(0.0, boss_intro_timer - delta)
 	var input := Vector2.ZERO if boss_intro_timer > 0.0 else Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 	dodge_direction = Vector3(input.x, 0, input.y)
 	if dodge_direction.length() < 0.1:
@@ -897,8 +931,11 @@ func _update_minion_combat(delta: float) -> void:
 				"XAMA": damage = 10.0
 			_weapon_strike(minion)
 			_spawn_combat_flash(target_enemy.global_position + Vector3(0, 1.0, 0), MINION_COLORS[kind], 1.35)
+			damage *= _equipment_damage_multiplier(kind)
 			_damage_enemy(target_enemy, damage)
-			timer = 0.9 if kind != "ASSASSINO" else 0.55
+			var tier := int(minion.get_meta("equipment_tier", 0))
+			var base_cooldown := 0.9 if kind != "ASSASSINO" else 0.55
+			timer = base_cooldown * (1.0 - float(tier) * 0.08)
 		minion.set_meta("attack_timer", timer)
 
 
@@ -990,6 +1027,7 @@ func _update_status() -> void:
 
 func _physics_process(delta: float) -> void:
 	anim_clock += delta
+	boss_intro_timer = maxf(0.0, boss_intro_timer - delta)
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)
 	dodge_cooldown = maxf(0.0, dodge_cooldown - delta)
 	dodge_time = maxf(0.0, dodge_time - delta)
@@ -998,39 +1036,3 @@ func _physics_process(delta: float) -> void:
 		combo_step = 0
 	special_cooldown = maxf(0.0, special_cooldown - delta)
 	var input := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
-	var direction := Vector3(input.x, 0, input.y)
-	if direction.length() > 0.1:
-		player.rotation.y = lerp_angle(player.rotation.y, atan2(-direction.x, -direction.z), 10.0 * delta)
-	player.velocity.x = direction.x * 6.0
-	player.velocity.z = direction.z * 6.0
-	if dodge_time > 0.0:
-		player.velocity.x = dodge_direction.x * 15.0
-		player.velocity.z = dodge_direction.z * 15.0
-	if not player.is_on_floor():
-		player.velocity.y -= 22.0 * delta
-	else:
-		player.velocity.y = 0.0
-	player.move_and_slide()
-	_animate_actor(player.get_child(0) as Node3D, delta, direction.length(), 0.0)
-	if boss_intro_timer > 0.0 and is_instance_valid(boss_intro_target):
-		var intro_camera := boss_intro_target.global_position + Vector3(0, 5.0, 11.5)
-		camera.global_position = camera.global_position.lerp(intro_camera, 2.2 * delta)
-		camera.look_at(boss_intro_target.global_position + Vector3(0, 2.0, 0), Vector3.UP)
-	else:
-		camera.global_position = camera.global_position.lerp(player.global_position + Vector3(0, 5.2, 9), 5.0 * delta)
-		camera.look_at(player.global_position + Vector3(0, 1, -3), Vector3.UP)
-	_update_enemy_ai(delta)
-	_update_boss_ai(delta)
-	_update_minion_combat(delta)
-	for i in range(minions.size()):
-		var minion := minions[i]
-		var target := player.global_position + Vector3((i - 1.5) * 1.5, 0, 2.2)
-		if selected_order == "ATACAR" and not enemies.is_empty():
-			target = enemies[0].global_position + Vector3((i - 1.5) * 0.8, 0, 1.5)
-		var old_position := minion.global_position
-		minion.global_position = minion.global_position.lerp(target, 2.8 * delta)
-		var minion_speed := old_position.distance_to(minion.global_position) / maxf(delta, 0.001)
-		_animate_actor(minion, delta, minion_speed, float(i) * 1.3)
-	for enemy in enemies:
-		if is_instance_valid(enemy):
-			_animate_actor(enemy, delta, 1.0, 2.0)
