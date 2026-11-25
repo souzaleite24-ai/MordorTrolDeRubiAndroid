@@ -1,0 +1,30 @@
+name: Validate Godot 3D prototype
+
+on:
+  push:
+    branches: [ "rebuild/godot-3d-core" ]
+    paths:
+      - "godot/**"
+      - ".github/workflows/godot.yml"
+  pull_request:
+    paths:
+      - "godot/**"
+      - ".github/workflows/godot.yml"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Godot 4.3
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.3.0
+          use-dotnet: false
+          include-templates: false
+      - name: Import and validate project
+        run: godot --headless --editor --path godot --quit
+      - name: Run headless scene smoke test
+        run: timeout 20s godot --headless --path godot --quit-after 3
