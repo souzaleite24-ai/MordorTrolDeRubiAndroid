@@ -198,10 +198,30 @@ func _create_hud() -> void:
 		button.custom_minimum_size.y = 58
 		button.pressed.connect(_on_control.bind(action))
 		controls.add_child(button)
+	var dpad := GridContainer.new()
+	dpad.columns = 3
+	dpad.position = Vector2(20, -205)
+	dpad.anchor_top = 1.0
+	dpad.anchor_bottom = 1.0
+	dpad.custom_minimum_size = Vector2(174, 174)
+	layer.add_child(dpad)
+	for direction in ["", "ui_up", "", "ui_left", "", "ui_right", "", "ui_down", ""]:
+		var move_button := Button.new()
+		move_button.text = "▲" if direction == "ui_up" else ("▼" if direction == "ui_down" else ("◀" if direction == "ui_left" else ("▶" if direction == "ui_right" else "")))
+		move_button.custom_minimum_size = Vector2(54, 54)
+		move_button.disabled = direction == ""
+		if direction != "":
+			move_button.button_down.connect(Input.action_press.bind(direction))
+			move_button.button_up.connect(Input.action_release.bind(direction))
+			move_button.mouse_exited.connect(_release_direction.bind(direction))
+		dpad.add_child(move_button)
 	var hint := Label.new()
 	hint.text = "WASD / setas: mover   •   toque: botões   •   toque em ORDEM para comandar a horda"
 	hint.position = Vector2(18, 116)
 	layer.add_child(hint)
+
+func _release_direction(action: String) -> void:
+	Input.action_release(action)
 
 func _on_control(action: String) -> void:
 	match action:
