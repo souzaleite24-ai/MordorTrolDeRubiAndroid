@@ -323,6 +323,73 @@ func _create_enemy(at: Vector3) -> void:
 	enemies.append(enemy)
 
 
+
+func _create_boss_arena(center: Vector3) -> void:
+	var arena := Node3D.new()
+	arena.name = "ArenaDeNekravor"
+	arena.position = center
+	var dark_stone := StandardMaterial3D.new()
+	dark_stone.albedo_color = Color(0.055, 0.045, 0.07)
+	dark_stone.roughness = 0.95
+	dark_stone.metallic = 0.18
+	var rune_glow := _glow_material(Color(0.34, 0.035, 0.62))
+	var seal := MeshInstance3D.new()
+	var seal_mesh := TorusMesh.new()
+	seal_mesh.inner_radius = 5.8
+	seal_mesh.outer_radius = 6.05
+	seal.mesh = seal_mesh
+	seal.position.y = 0.08
+	seal.rotation.x = deg_to_rad(90)
+	seal.material_override = rune_glow
+	arena.add_child(seal)
+	for i in range(8):
+		var angle := TAU * float(i) / 8.0
+		var obelisk := MeshInstance3D.new()
+		var obelisk_mesh := BoxMesh.new()
+		obelisk_mesh.size = Vector3(0.85, 5.2 if i % 2 == 0 else 3.8, 0.85)
+		obelisk.mesh = obelisk_mesh
+		obelisk.position = Vector3(cos(angle) * 9.0, obelisk_mesh.size.y * 0.5, sin(angle) * 9.0)
+		obelisk.rotation.y = -angle
+		obelisk.material_override = dark_stone
+		arena.add_child(obelisk)
+		var rune := MeshInstance3D.new()
+		var rune_mesh := BoxMesh.new()
+		rune_mesh.size = Vector3(0.12, 2.2, 0.12)
+		rune.mesh = rune_mesh
+		rune.position = obelisk.position + Vector3(0, 0, -0.46)
+		rune.material_override = rune_glow
+		arena.add_child(rune)
+		var flame := OmniLight3D.new()
+		flame.position = obelisk.position + Vector3(0, 2.2, -0.8)
+		flame.light_color = Color(0.48, 0.08, 0.82)
+		flame.light_energy = 1.7
+		flame.omni_range = 8.0
+		arena.add_child(flame)
+	var entrance := MeshInstance3D.new()
+	var gate_mesh := BoxMesh.new()
+	gate_mesh.size = Vector3(5.5, 6.5, 0.7)
+	entrance.mesh = gate_mesh
+	entrance.position = Vector3(0, 3.25, -13.0)
+	entrance.material_override = dark_stone
+	arena.add_child(entrance)
+	var gate_rune := MeshInstance3D.new()
+	var gate_ring := TorusMesh.new()
+	gate_ring.inner_radius = 1.45
+	gate_ring.outer_radius = 1.7
+	gate_rune.mesh = gate_ring
+	gate_rune.position = Vector3(0, 3.3, -12.55)
+	gate_rune.material_override = rune_glow
+	arena.add_child(gate_rune)
+	add_child(arena)
+
+func _boss_entrance(boss: Node3D) -> void:
+	boss.scale = Vector3.ONE * 0.08
+	var reveal := create_tween()
+	reveal.tween_interval(0.45)
+	reveal.tween_property(boss, "scale", Vector3.ONE * 1.55, 0.9).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_spawn_special_ring(boss.global_position + Vector3(0, 0.14, 0), Color(0.62, 0.04, 0.9), 8.0)
+	_spawn_combat_flash(boss.global_position + Vector3(0, 2.0, 0), Color(0.48, 0.06, 0.82), 4.5)
+
 func _create_boss(at: Vector3) -> void:
 	var boss := Node3D.new()
 	boss.name = "Nekravor_TiranoAbissal"
@@ -414,9 +481,10 @@ func _create_boss(at: Vector3) -> void:
 	crown.material_override = violet
 	crown.set_meta("boss_crown", true)
 	boss.add_child(crown)
+	_create_boss_arena(at)
 	add_child(boss)
 	enemies.append(boss)
-	_spawn_special_ring(at + Vector3(0, 0.12, 0), Color(0.48, 0.06, 0.82), 4.8)
+	_boss_entrance(boss)
 	_update_boss_hud()
 
 func _create_hud() -> void:
