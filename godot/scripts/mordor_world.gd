@@ -785,7 +785,7 @@ func _toggle_npc_dialog() -> void:
 		return
 	npc_dialog_panel.visible = not npc_dialog_panel.visible
 	if npc_dialog_panel.visible:
-		npc_dialog_label.text = "ORÁCULO DAS CINZAS\\n\\nAs ruínas estão despertando. " + _quest_description() + ".\\n\\n" + ("Prove sua força contra os guardiões. Cada vitória concede experiência." if quest_index == 0 else "O tirano abissal aguarda no portal. Derrote Nekravor para receber a recompensa lendária.") + "\\n\\nContratos concluídos: %d" % quests_completed
+		npc_dialog_label.text = "ORÁCULO DAS CINZAS\n\nAs ruínas estão despertando. " + _quest_description() + ".\n\n" + ("Prove sua força contra os guardiões. Cada vitória concede experiência." if quest_index == 0 else "O tirano abissal aguarda no portal. Derrote Nekravor para receber a recompensa lendária.") + "\n\nContratos concluídos: %d" % quests_completed
 
 func _on_control(action: String) -> void:
 	if boss_intro_timer > 0.0:
