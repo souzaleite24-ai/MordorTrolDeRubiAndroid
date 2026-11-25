@@ -4,6 +4,7 @@ config_version=5
 
 [application]
 config/name="Mordor 3D — Crônicas de Mordor"
+config/icon="res://icon.svg"
 run/main_scene="res://scenes/mordor_world.tscn"
 
 [display]
