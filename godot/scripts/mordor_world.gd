@@ -31,6 +31,8 @@ var boss_name_label: Label
 var boss_intro_label: Label
 var boss_intro_timer := 0.0
 var boss_intro_target: Node3D
+var relic_count := 0
+var relic_damage_bonus := 0.0
 
 func _ready() -> void:
 	_setup_input()
@@ -602,7 +604,8 @@ func _on_control(action: String) -> void:
 func _damage_enemy(enemy: Node3D, amount: float) -> void:
 	if not is_instance_valid(enemy):
 		return
-	var hp := float(enemy.get_meta("health", 90.0)) - amount
+	var final_damage := amount * (1.0 + relic_damage_bonus)
+	var hp := float(enemy.get_meta("health", 90.0)) - final_damage
 	enemy.set_meta("health", hp)
 	if hp <= 0.0:
 		var at := enemy.global_position
@@ -610,7 +613,11 @@ func _damage_enemy(enemy: Node3D, amount: float) -> void:
 		enemies.erase(enemy)
 		enemy.queue_free()
 		if defeated_boss:
+			relic_count += 1
+			relic_damage_bonus += 0.10
+			player_health = minf(100.0, player_health + 30.0)
 			_spawn_special_ring(at + Vector3(0, 0.15, 0), Color(0.72, 0.32, 1.0), 7.0)
+			_show_relic_reward()
 			if boss_name_label:
 				boss_name_label.visible = false
 			if boss_health_bar:
@@ -625,6 +632,17 @@ func _damage_enemy(enemy: Node3D, amount: float) -> void:
 		_update_status()
 	else:
 		_update_boss_hud()
+
+func _show_relic_reward() -> void:
+	if not boss_intro_label:
+		return
+	boss_intro_label.text = "RELÍQUIA ABISSAL DESBLOQUEADA\n+10% DANO  •  +30 VIDA\nRelíquias: %d" % relic_count
+	boss_intro_label.visible = true
+	boss_intro_label.modulate.a = 1.0
+	var reward_tween := create_tween()
+	reward_tween.tween_interval(2.8)
+	reward_tween.tween_property(boss_intro_label, "modulate:a", 0.0, 0.8)
+	reward_tween.tween_callback(func(): boss_intro_label.visible = false)
 
 func _spawn_combat_flash(at: Vector3, tint: Color, radius: float) -> void:
 	var flash := MeshInstance3D.new()
