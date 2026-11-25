@@ -1416,3 +1416,26 @@ func _physics_process(delta: float) -> void:
 		combo_step = 0
 	special_cooldown = maxf(0.0, special_cooldown - delta)
 	var input := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	if not is_instance_valid(player):
+		return
+	if boss_intro_timer > 0.0:
+		input = Vector2.ZERO
+	var move_direction := Vector3(input.x, 0.0, input.y)
+	if move_direction.length_squared() > 1.0:
+		move_direction = move_direction.normalized()
+	var move_speed := 6.2
+	if dodge_time > 0.0:
+		move_direction = dodge_direction
+		move_speed = 14.0
+	player.velocity.x = move_direction.x * move_speed
+	player.velocity.z = move_direction.z * move_speed
+	if not player.is_on_floor():
+		player.velocity.y -= 24.0 * delta
+	else:
+		player.velocity.y = 0.0
+	player.move_and_slide()
+	if move_direction.length_squared() > 0.01:
+		player.rotation.y = atan2(move_direction.x, move_direction.z)
+	_animate_actor(player.get_child(0) as Node3D, delta, move_direction.length() * (1.0 if dodge_time <= 0.0 else 1.5), 0.0)
+	_update_boss_ai(delta)
+	_update_enemy_ai(delta)
