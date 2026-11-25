@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import kotlin.math.*
@@ -42,10 +43,30 @@ class GameView(context: Context) : View(context) {
         val a=rng.nextFloat()*6.283f; val r=380f+rng.nextFloat()*170f
         orcs.add(Orc(px+cos(a)*r,py+sin(a)*r))
     }
+    private var renderError: String? = null
+
     override fun onDraw(c: Canvas) {
         super.onDraw(c)
-        val now=System.nanoTime(); val dt=((now-last)/1e9).toFloat().coerceIn(0f,.04f); last=now
-        update(dt); render(c); postInvalidateOnAnimation()
+        try {
+            val now=System.nanoTime()
+            val dt=((now-last)/1e9).toFloat().coerceIn(0f,.04f)
+            last=now
+            update(dt)
+            render(c)
+        } catch (t: Throwable) {
+            Log.e("MordorTrolRubi", "Falha durante a inicializacao/renderizacao do jogo", t)
+            renderError = t.javaClass.simpleName + ": " + (t.message ?: "sem detalhes")
+            p.color = Color.BLACK
+            c.drawColor(Color.BLACK)
+            p.color = Color.WHITE
+            p.textSize = 22f
+            p.typeface = Typeface.DEFAULT_BOLD
+            c.drawText("ERRO AO INICIAR O JOGO", 24f, 48f, p)
+            p.textSize = 14f
+            c.drawText(renderError!!.take(100), 24f, 78f, p)
+            c.drawText("Envie uma foto desta tela para a equipe.", 24f, 108f, p)
+        }
+        postInvalidateOnAnimation()
     }
     private fun update(dt: Float) {
         if(over) return
@@ -113,7 +134,7 @@ class GameView(context: Context) : View(context) {
         }
     }
     private fun boxText(c:Canvas,s:String,l:Float,t:Float,r:Float,b:Float){p.color=Color.argb(180,5,10,8);c.drawRoundRect(l,t,r,b,12f,12f,p);text(s,l+12,t+25,16f,Color.WHITE)}
-    private fun text(s:String,x:Float,y:Float,size:Float,color:Int){p.color=color;p.textSize=size;p.typeface=Typeface.DEFAULT_BOLD; /* canvas handled separately */ }
+    private fun text(s:String,x:Float,y:Float,size:Float,color:Int){p.color=color;p.textSize=size;p.typeface=Typeface.DEFAULT_BOLD}
     private fun text(c:Canvas,s:String,x:Float,y:Float,size:Float,color:Int){p.color=color;p.textSize=size;p.typeface=Typeface.DEFAULT_BOLD;c.drawText(s,x,y,p)}
     private fun center(c:Canvas,s:String,x:Float,y:Float,size:Float,color:Int){p.textSize=size;p.typeface=Typeface.DEFAULT_BOLD;text(c,s,x-p.measureText(s)/2,y,size,color)}
     override fun onTouchEvent(e:MotionEvent):Boolean{
