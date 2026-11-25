@@ -44,6 +44,10 @@ var strength_attribute := 0
 var vitality_attribute := 0
 var arcane_attribute := 0
 var max_player_health := 100.0
+var quest_label: Label
+var quest_index := 0
+var quest_progress := 0
+var quests_completed := 0
 
 func _ready() -> void:
 	_load_progress()
@@ -56,6 +60,7 @@ func _ready() -> void:
 	_create_enemy(Vector3(0, 0, -11))
 	_create_hud()
 	_update_status()
+	_update_quest_hud()
 
 func _xp_to_next_level() -> int:
 	return 100 + (player_level - 1) * 60
@@ -70,6 +75,9 @@ func _load_progress() -> void:
 	strength_attribute = maxi(0, int(save.get_value("hero", "strength", 0)))
 	vitality_attribute = maxi(0, int(save.get_value("hero", "vitality", 0)))
 	arcane_attribute = maxi(0, int(save.get_value("hero", "arcane", 0)))
+	quest_index = clampi(int(save.get_value("quests", "index", 0)), 0, 1)
+	quest_progress = maxi(0, int(save.get_value("quests", "progress", 0)))
+	quests_completed = maxi(0, int(save.get_value("quests", "completed", 0)))
 	max_player_health = 100.0 + float(vitality_attribute) * 10.0
 	player_health = max_player_health
 
@@ -81,6 +89,9 @@ func _save_progress() -> void:
 	save.set_value("hero", "strength", strength_attribute)
 	save.set_value("hero", "vitality", vitality_attribute)
 	save.set_value("hero", "arcane", arcane_attribute)
+	save.set_value("quests", "index", quest_index)
+	save.set_value("quests", "progress", quest_progress)
+	save.set_value("quests", "completed", quests_completed)
 	save.save("user://mordor_progress.cfg")
 
 func _gain_experience(amount: int) -> void:
@@ -102,6 +113,42 @@ func _gain_experience(amount: int) -> void:
 	_save_progress()
 	_update_status()
 	_update_inventory()
+
+func _quest_description() -> String:
+	if quest_index == 0:
+		return "CONTRATO: Elimine 5 guardiões corrompidos (%d/5)" % quest_progress
+	return "CONTRATO: Derrote Nekravor (%d/1)" % quest_progress
+
+func _advance_quest(defeated_boss: bool) -> void:
+	if quest_index == 0:
+		if defeated_boss:
+			return
+		quest_progress += 1
+		if quest_progress >= 5:
+			_complete_quest(100)
+	else:
+		if defeated_boss:
+			quest_progress = 1
+			_complete_quest(250)
+	_update_quest_hud()
+	_save_progress()
+
+func _complete_quest(reward_xp: int) -> void:
+	quests_completed += 1
+	quest_index = 1 - quest_index
+	quest_progress = 0
+	boss_intro_label.text = "CONTRATO CONCLUÍDO!\n+%d XP" % reward_xp
+	boss_intro_label.visible = true
+	boss_intro_label.modulate.a = 1.0
+	var quest_tween := create_tween()
+	quest_tween.tween_interval(2.0)
+	quest_tween.tween_property(boss_intro_label, "modulate:a", 0.0, 0.5)
+	quest_tween.tween_callback(func(): boss_intro_label.visible = false)
+	_gain_experience(reward_xp)
+
+func _update_quest_hud() -> void:
+	if quest_label:
+		quest_label.text = _quest_description() + "  |  Concluídos: %d" % quests_completed
 
 func _spend_attribute(attribute: String) -> void:
 	if unspent_attribute_points <= 0:
@@ -595,6 +642,9 @@ func _create_hud() -> void:
 	vbox.add_child(title)
 	status_label = Label.new()
 	vbox.add_child(status_label)
+	quest_label = Label.new()
+	quest_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(quest_label)
 	boss_name_label = Label.new()
 	boss_name_label.text = "NEKRAVOR — O TIRANO ABISSAL"
 	boss_name_label.visible = false
@@ -715,6 +765,7 @@ func _damage_enemy(enemy: Node3D, amount: float) -> void:
 	if hp <= 0.0:
 		var at := enemy.global_position
 		var defeated_boss := bool(enemy.get_meta("is_boss", false))
+		_advance_quest(defeated_boss)
 		_gain_experience(180 if defeated_boss else 35)
 		enemies.erase(enemy)
 		enemy.queue_free()
@@ -1109,6 +1160,7 @@ func _update_enemy_ai(delta: float) -> void:
 func _update_status() -> void:
 	if status_label:
 		status_label.text = "Nv.%d  XP %d/%d  |  Vida: %d/%d  |  Horda: %d  |  Ordem: %s  |  Classe: %s  |  Combo: %d/3  |  Defesa: %s  |  Onda: %d" % [player_level, player_xp, _xp_to_next_level(), int(player_health), int(max_player_health), minions.size(), selected_order, selected_class, combo_step, "ON" if guarding else "OFF", wave]
+	_update_quest_hud()
 
 func _physics_process(delta: float) -> void:
 	anim_clock += delta
