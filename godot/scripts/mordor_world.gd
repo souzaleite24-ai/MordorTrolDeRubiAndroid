@@ -106,25 +106,98 @@ func _create_ruins() -> void:
 
 func _make_actor(color: Color, height: float = 1.8) -> Node3D:
 	var actor := Node3D.new()
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = 0.72
+	material.metallic = 0.12
+	var dark_metal := StandardMaterial3D.new()
+	dark_metal.albedo_color = Color(0.075, 0.065, 0.06)
+	dark_metal.metallic = 0.72
+	dark_metal.roughness = 0.38
+	var trim := StandardMaterial3D.new()
+	trim.albedo_color = Color(0.48, 0.19, 0.055)
+	trim.metallic = 0.62
+	trim.roughness = 0.42
+
 	var body := MeshInstance3D.new()
 	var capsule := CapsuleMesh.new()
 	capsule.radius = 0.42
 	capsule.height = height
 	body.mesh = capsule
-	var material := StandardMaterial3D.new()
-	material.albedo_color = color
-	material.roughness = 0.72
-	material.metallic = 0.12
+	body.position.y = height * 0.5
 	body.material_override = material
 	actor.add_child(body)
+
+	var chest := MeshInstance3D.new()
+	var chest_mesh := BoxMesh.new()
+	chest_mesh.size = Vector3(0.72, 0.62, 0.22)
+	chest.mesh = chest_mesh
+	chest.position = Vector3(0, height * 0.57, -0.31)
+	chest.material_override = dark_metal
+	actor.add_child(chest)
+
 	var head := MeshInstance3D.new()
 	var sphere := SphereMesh.new()
 	sphere.radius = 0.27
 	sphere.height = 0.54
 	head.mesh = sphere
-	head.position.y = height * 0.48
+	head.position.y = height * 0.88
 	head.material_override = material
 	actor.add_child(head)
+
+	# Ombreiras, braçadeiras e elmo dão uma silhueta distinta sem assets externos.
+	for side in [-1.0, 1.0]:
+		var shoulder := MeshInstance3D.new()
+		var shoulder_mesh := SphereMesh.new()
+		shoulder_mesh.radius = 0.23
+		shoulder_mesh.height = 0.34
+		shoulder.mesh = shoulder_mesh
+		shoulder.position = Vector3(side * 0.43, height * 0.68, 0)
+		shoulder.material_override = dark_metal
+		actor.add_child(shoulder)
+
+		var arm := MeshInstance3D.new()
+		var arm_mesh := CapsuleMesh.new()
+		arm_mesh.radius = 0.105
+		arm_mesh.height = height * 0.38
+		arm.mesh = arm_mesh
+		arm.position = Vector3(side * 0.48, height * 0.43, -0.015)
+		arm.rotation.z = side * -0.12
+		arm.material_override = material
+		actor.add_child(arm)
+
+		var bracer := MeshInstance3D.new()
+		var bracer_mesh := BoxMesh.new()
+		bracer_mesh.size = Vector3(0.19, 0.25, 0.2)
+		bracer.mesh = bracer_mesh
+		bracer.position = Vector3(side * 0.49, height * 0.31, -0.02)
+		bracer.material_override = trim
+		actor.add_child(bracer)
+
+	var helmet := MeshInstance3D.new()
+	var helmet_mesh := SphereMesh.new()
+	helmet_mesh.radius = 0.31
+	helmet_mesh.height = 0.24
+	helmet.mesh = helmet_mesh
+	helmet.position.y = height * 1.02
+	helmet.material_override = dark_metal
+	actor.add_child(helmet)
+
+	var crest := MeshInstance3D.new()
+	var crest_mesh := BoxMesh.new()
+	crest_mesh.size = Vector3(0.075, 0.34, 0.09)
+	crest.mesh = crest_mesh
+	crest.position = Vector3(0, height * 1.13, 0.02)
+	crest.material_override = trim
+	actor.add_child(crest)
+
+	var belt := MeshInstance3D.new()
+	var belt_mesh := BoxMesh.new()
+	belt_mesh.size = Vector3(0.68, 0.13, 0.27)
+	belt.mesh = belt_mesh
+	belt.position = Vector3(0, height * 0.34, 0)
+	belt.material_override = dark_metal
+	actor.add_child(belt)
 	return actor
 
 func _create_player() -> void:
