@@ -914,7 +914,7 @@ func _update_inventory() -> void:
 	for kind in ["BRUTAMONTES", "ASSASSINO", "PIROMANTE", "XAMA"]:
 		var tier := int(equipment_tiers.get(kind, 0))
 		var max_unlocked := mini(relic_count, 3)
-		var weapon_name := {"BRUTAMONTES": "Martelo do Núcleo", "ASSASSINO": "Gêmeas do Eclipse", "PIROMANTE": "Orbe da Chama", "XAMA": "Totem da Aurora"}[kind]
+		var weapon_name: String = str({"BRUTAMONTES": "Martelo do Núcleo", "ASSASSINO": "Gêmeas do Eclipse", "PIROMANTE": "Orbe da Chama", "XAMA": "Totem da Aurora"}[kind])
 		var button := inventory_buttons[kind] as Button
 		button.text = "%s — %s  |  Nível %d/%d (+%d%% dano)" % [kind, weapon_name, tier, max_unlocked, int((_equipment_damage_multiplier(kind) - 1.0) * 100.0)]
 		button.disabled = max_unlocked == 0
