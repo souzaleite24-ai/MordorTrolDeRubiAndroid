@@ -48,6 +48,10 @@ var quest_label: Label
 var quest_index := 0
 var quest_progress := 0
 var quests_completed := 0
+var npc_dialog_panel: PanelContainer
+var npc_dialog_label: Label
+var npc_nearby := false
+var npc_node: Node3D
 
 func _ready() -> void:
 	_load_progress()
@@ -55,6 +59,7 @@ func _ready() -> void:
 	_setup_environment()
 	_create_ground()
 	_create_ruins()
+	_create_npc()
 	_create_player()
 	_create_minions()
 	_create_enemy(Vector3(0, 0, -11))
@@ -172,7 +177,8 @@ func _setup_input() -> void:
 		"ui_left": [KEY_A],
 		"ui_right": [KEY_D],
 		"ui_up": [KEY_W],
-		"ui_down": [KEY_S]
+		"ui_down": [KEY_S],
+		"interact": [KEY_E]
 	}
 	for action in bindings:
 		for keycode in bindings[action]:
@@ -405,6 +411,31 @@ func _add_weapon(actor: Node3D, kind: String) -> void:
 			rune.radius = 0.075
 			rune.height = 0.15
 			_weapon_piece(pivot, rune, edge if kind == "XAMA" else glow, Vector3(side * 0.19, 0.82, -0.08), Vector3.ONE)
+
+func _create_npc() -> void:
+	npc_node = _make_actor(Color(0.12, 0.32, 0.30), 1.9)
+	npc_node.name = "OraculoDasCinzas"
+	npc_node.position = Vector3(-4.0, 0.0, -3.0)
+	var aura := OmniLight3D.new()
+	aura.position = Vector3(0, 2.0, 0)
+	aura.light_color = Color(0.20, 0.85, 0.72)
+	aura.light_energy = 1.4
+	aura.omni_range = 4.5
+	npc_node.add_child(aura)
+	var rune_material := StandardMaterial3D.new()
+	rune_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rune_material.albedo_color = Color(0.25, 1.0, 0.78)
+	rune_material.emission_enabled = true
+	rune_material.emission = Color(0.12, 0.9, 0.65)
+	var rune := MeshInstance3D.new()
+	var rune_mesh := SphereMesh.new()
+	rune_mesh.radius = 0.16
+	rune_mesh.height = 0.32
+	rune.mesh = rune_mesh
+	rune.material_override = rune_material
+	rune.position = Vector3(0, 2.15, -0.35)
+	npc_node.add_child(rune)
+	add_child(npc_node)
 
 func _create_player() -> void:
 	player = CharacterBody3D.new()
@@ -692,6 +723,23 @@ func _create_hud() -> void:
 		inventory_box.add_child(equip_button)
 		inventory_buttons[kind] = equip_button
 	_update_inventory()
+	npc_dialog_panel = PanelContainer.new()
+	npc_dialog_panel.position = Vector2(0, 0)
+	npc_dialog_panel.anchor_left = 0.28
+	npc_dialog_panel.anchor_right = 0.72
+	npc_dialog_panel.anchor_top = 0.28
+	npc_dialog_panel.anchor_bottom = 0.65
+	npc_dialog_panel.visible = false
+	layer.add_child(npc_dialog_panel)
+	var dialog_box := VBoxContainer.new()
+	npc_dialog_panel.add_child(dialog_box)
+	npc_dialog_label = Label.new()
+	npc_dialog_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dialog_box.add_child(npc_dialog_label)
+	var close_dialog := Button.new()
+	close_dialog.text = "FECHAR"
+	close_dialog.pressed.connect(func(): npc_dialog_panel.visible = false)
+	dialog_box.add_child(close_dialog)
 	var controls := HBoxContainer.new()
 	controls.anchor_left = 0.0
 	controls.anchor_top = 1.0
@@ -700,12 +748,12 @@ func _create_hud() -> void:
 	controls.offset_top = -76
 	controls.offset_bottom = -12
 	layer.add_child(controls)
-	for action in ["ATACAR", "ESPECIAL", "ESQUIVA", "DEFESA", "ORDEN", "CLASSE", "INVENTARIO"]:
+	for action in ["ATACAR", "ESPECIAL", "ESQUIVA", "DEFESA", "ORDEN", "CLASSE", "INVENTARIO", "FALAR"]:
 		var button := Button.new()
 		button.text = action
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.custom_minimum_size.y = 58
-		button.pressed.connect(_on_control.bind(action))
+		button.pressed.connect(_on_control.bind("TALK" if action == "FALAR" else action))
 		controls.add_child(button)
 	var dpad := GridContainer.new()
 	dpad.columns = 3
@@ -732,6 +780,13 @@ func _create_hud() -> void:
 func _release_direction(action: String) -> void:
 	Input.action_release(action)
 
+func _toggle_npc_dialog() -> void:
+	if npc_dialog_panel == null or not npc_nearby:
+		return
+	npc_dialog_panel.visible = not npc_dialog_panel.visible
+	if npc_dialog_panel.visible:
+		npc_dialog_label.text = "ORÁCULO DAS CINZAS\\n\\nAs ruínas estão despertando. " + _quest_description() + ".\\n\\n" + ("Prove sua força contra os guardiões. Cada vitória concede experiência." if quest_index == 0 else "O tirano abissal aguarda no portal. Derrote Nekravor para receber a recompensa lendária.") + "\\n\\nContratos concluídos: %d" % quests_completed
+
 func _on_control(action: String) -> void:
 	if boss_intro_timer > 0.0:
 		return
@@ -755,6 +810,8 @@ func _on_control(action: String) -> void:
 		"INVENTARIO":
 			inventory_panel.visible = not inventory_panel.visible
 			_update_inventory()
+		"TALK":
+			_toggle_npc_dialog()
 
 func _damage_enemy(enemy: Node3D, amount: float) -> void:
 	if not is_instance_valid(enemy):
@@ -1163,6 +1220,10 @@ func _update_status() -> void:
 	_update_quest_hud()
 
 func _physics_process(delta: float) -> void:
+	if is_instance_valid(player) and is_instance_valid(npc_node):
+		npc_nearby = player.global_position.distance_to(npc_node.global_position) <= 3.2
+		if Input.is_action_just_pressed("interact") and npc_nearby:
+			_toggle_npc_dialog()
 	anim_clock += delta
 	boss_intro_timer = maxf(0.0, boss_intro_timer - delta)
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)
