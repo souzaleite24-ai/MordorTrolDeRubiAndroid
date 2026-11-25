@@ -37,8 +37,16 @@ var inventory_panel: PanelContainer
 var inventory_label: Label
 var inventory_buttons: Dictionary = {}
 var equipment_tiers: Dictionary = {"BRUTAMONTES": 0, "ASSASSINO": 0, "PIROMANTE": 0, "XAMA": 0}
+var player_level := 1
+var player_xp := 0
+var unspent_attribute_points := 0
+var strength_attribute := 0
+var vitality_attribute := 0
+var arcane_attribute := 0
+var max_player_health := 100.0
 
 func _ready() -> void:
+	_load_progress()
 	_setup_input()
 	_setup_environment()
 	_create_ground()
@@ -48,6 +56,69 @@ func _ready() -> void:
 	_create_enemy(Vector3(0, 0, -11))
 	_create_hud()
 	_update_status()
+
+func _xp_to_next_level() -> int:
+	return 100 + (player_level - 1) * 60
+
+func _load_progress() -> void:
+	var save := ConfigFile.new()
+	if save.load("user://mordor_progress.cfg") != OK:
+		return
+	player_level = maxi(1, int(save.get_value("hero", "level", 1)))
+	player_xp = maxi(0, int(save.get_value("hero", "xp", 0)))
+	unspent_attribute_points = maxi(0, int(save.get_value("hero", "points", 0)))
+	strength_attribute = maxi(0, int(save.get_value("hero", "strength", 0)))
+	vitality_attribute = maxi(0, int(save.get_value("hero", "vitality", 0)))
+	arcane_attribute = maxi(0, int(save.get_value("hero", "arcane", 0)))
+	max_player_health = 100.0 + float(vitality_attribute) * 10.0
+	player_health = max_player_health
+
+func _save_progress() -> void:
+	var save := ConfigFile.new()
+	save.set_value("hero", "level", player_level)
+	save.set_value("hero", "xp", player_xp)
+	save.set_value("hero", "points", unspent_attribute_points)
+	save.set_value("hero", "strength", strength_attribute)
+	save.set_value("hero", "vitality", vitality_attribute)
+	save.set_value("hero", "arcane", arcane_attribute)
+	save.save("user://mordor_progress.cfg")
+
+func _gain_experience(amount: int) -> void:
+	player_xp += amount
+	var gained_levels := 0
+	while player_xp >= _xp_to_next_level():
+		player_xp -= _xp_to_next_level()
+		player_level += 1
+		unspent_attribute_points += 1
+		gained_levels += 1
+	if gained_levels > 0:
+		boss_intro_label.text = "NÍVEL %d ALCANÇADO!\\n+%d PONTO(S) DE ATRIBUTO" % [player_level, gained_levels]
+		boss_intro_label.visible = true
+		boss_intro_label.modulate.a = 1.0
+		var level_tween := create_tween()
+		level_tween.tween_interval(2.0)
+		level_tween.tween_property(boss_intro_label, "modulate:a", 0.0, 0.5)
+		level_tween.tween_callback(func(): boss_intro_label.visible = false)
+	_save_progress()
+	_update_status()
+	_update_inventory()
+
+func _spend_attribute(attribute: String) -> void:
+	if unspent_attribute_points <= 0:
+		return
+	match attribute:
+		"FORÇA":
+			strength_attribute += 1
+		"VITALIDADE":
+			vitality_attribute += 1
+			max_player_health += 10.0
+			player_health = minf(max_player_health, player_health + 10.0)
+		"ARCANO":
+			arcane_attribute += 1
+	unspent_attribute_points -= 1
+	_save_progress()
+	_update_status()
+	_update_inventory()
 
 func _setup_input() -> void:
 	var bindings := {
@@ -558,6 +629,12 @@ func _create_hud() -> void:
 	inventory_label.add_theme_font_size_override("font_size", 14)
 	inventory_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	inventory_box.add_child(inventory_label)
+	for attribute in ["FORÇA", "VITALIDADE", "ARCANO"]:
+		var attribute_button := Button.new()
+		attribute_button.custom_minimum_size.y = 34
+		attribute_button.pressed.connect(_spend_attribute.bind(attribute))
+		inventory_box.add_child(attribute_button)
+		inventory_buttons["ATRIBUTO_" + attribute] = attribute_button
 	for kind in ["BRUTAMONTES", "ASSASSINO", "PIROMANTE", "XAMA"]:
 		var equip_button := Button.new()
 		equip_button.custom_minimum_size.y = 38
@@ -638,13 +715,14 @@ func _damage_enemy(enemy: Node3D, amount: float) -> void:
 	if hp <= 0.0:
 		var at := enemy.global_position
 		var defeated_boss := bool(enemy.get_meta("is_boss", false))
+		_gain_experience(180 if defeated_boss else 35)
 		enemies.erase(enemy)
 		enemy.queue_free()
 		if defeated_boss:
 			relic_count += 1
 			relic_damage_bonus += 0.10
 			_upgrade_minion_relics()
-			player_health = minf(100.0, player_health + 30.0)
+			player_health = minf(max_player_health, player_health + 30.0)
 			_spawn_special_ring(at + Vector3(0, 0.15, 0), Color(0.72, 0.32, 1.0), 7.0)
 			_show_relic_reward()
 			_update_inventory()
@@ -714,12 +792,18 @@ func _cycle_equipment(kind: String) -> void:
 	_update_inventory()
 
 func _inventory_text() -> String:
-	return "INVENTÁRIO ABISSAL\nRelíquias: %d  |  Dano global: +%d%%\nEquipamentos aprimorados causam mais dano e atacam mais rápido.\nCada relíquia libera um nível (máx. 3)." % [relic_count, int(relic_damage_bonus * 100.0)]
+	return "INVENTÁRIO ABISSAL\nNível %d  |  XP: %d/%d  |  Pontos: %d\nForça %d  •  Vitalidade %d  •  Arcano %d\nVida máxima: %d  |  Relíquias: %d  |  Dano global: +%d%%\nEquipamentos aprimorados causam mais dano e atacam mais rápido.\nCada relíquia libera um nível (máx. 3)." % [player_level, player_xp, _xp_to_next_level(), unspent_attribute_points, strength_attribute, vitality_attribute, arcane_attribute, int(max_player_health), relic_count, int(relic_damage_bonus * 100.0)]
 
 func _update_inventory() -> void:
 	if inventory_label:
 		inventory_label.text = _inventory_text()
-	for kind in inventory_buttons:
+	for attribute in ["FORÇA", "VITALIDADE", "ARCANO"]:
+		var attribute_button := inventory_buttons.get("ATRIBUTO_" + attribute) as Button
+		if attribute_button:
+			var current := strength_attribute if attribute == "FORÇA" else (vitality_attribute if attribute == "VITALIDADE" else arcane_attribute)
+			attribute_button.text = "%s — %d  |  gastar 1 ponto" % [attribute, current]
+			attribute_button.disabled = unspent_attribute_points <= 0
+	for kind in ["BRUTAMONTES", "ASSASSINO", "PIROMANTE", "XAMA"]:
 		var tier := int(equipment_tiers.get(kind, 0))
 		var max_unlocked := mini(relic_count, 3)
 		var weapon_name := {"BRUTAMONTES": "Martelo do Núcleo", "ASSASSINO": "Gêmeas do Eclipse", "PIROMANTE": "Orbe da Chama", "XAMA": "Totem da Aurora"}[kind]
@@ -785,7 +869,7 @@ func _attack() -> void:
 	for enemy in enemies:
 		if is_instance_valid(enemy) and player.global_position.distance_to(enemy.global_position) < 4.0:
 			_spawn_combat_flash(enemy.global_position + Vector3(0, 1.0, 0), Color(1.0, 0.25, 0.08), 1.7)
-			_damage_enemy(enemy, 24.0 + combo_step * 9.0)
+			_damage_enemy(enemy, (24.0 + combo_step * 9.0) * (1.0 + float(strength_attribute) * 0.04))
 			if combo_step == 3:
 				_spawn_special_ring(enemy.global_position + Vector3(0, 0.15, 0), Color(1.0, 0.52, 0.12), 1.9)
 			break
@@ -848,7 +932,7 @@ func _cast_spell() -> void:
 			_spawn_combat_flash(player.global_position + Vector3(0, 1.0, -0.8), Color(1.0, 0.38, 0.06), 3.4)
 			for enemy in enemies.duplicate():
 				if is_instance_valid(enemy) and player.global_position.distance_to(enemy.global_position) < 5.5:
-					_damage_enemy(enemy, 55.0)
+					_damage_enemy(enemy, 55.0 * (1.0 + float(arcane_attribute) * 0.05))
 		"ASSASSINO":
 			# Três cortes rápidos no alvo mais próximo.
 			var target: Node3D = _nearest_enemy()
@@ -856,7 +940,7 @@ func _cast_spell() -> void:
 				for hit in range(3):
 					if is_instance_valid(target):
 						_spawn_combat_flash(target.global_position + Vector3(0, 1.0, 0), Color(0.35, 1.0, 0.48), 1.25 + hit * 0.18)
-						_damage_enemy(target, 17.0)
+						_damage_enemy(target, 17.0 * (1.0 + float(arcane_attribute) * 0.05))
 			else:
 				_spawn_combat_flash(player.global_position + Vector3(0, 1.0, -1.0), Color(0.35, 1.0, 0.48), 2.0)
 		"PIROMANTE":
@@ -869,7 +953,7 @@ func _cast_spell() -> void:
 			for enemy in enemies.duplicate():
 				if is_instance_valid(enemy) and player.global_position.distance_to(enemy.global_position) < 7.0:
 					_spawn_combat_flash(enemy.global_position + Vector3(0, 1.0, 0), Color(0.12, 0.68, 1.0), 1.8)
-					_damage_enemy(enemy, 22.0)
+					_damage_enemy(enemy, 22.0 * (1.0 + float(arcane_attribute) * 0.05))
 	_update_status()
 
 func _nearest_enemy() -> Node3D:
@@ -986,7 +1070,7 @@ func _update_boss_ai(delta: float) -> void:
 				var impact_radius := 5.8 if phase_two else 4.4
 				_spawn_special_ring(boss.global_position + Vector3(0, 0.16, 0), Color(1.0, 0.025, 0.18) if phase_two else Color(0.68, 0.08, 0.95), impact_radius)
 				if impact_distance < impact_radius and dodge_time <= 0.0:
-					player_health = maxf(0.0, player_health - (22.0 if phase_two else 13.0) * (0.35 if guarding else 1.0))
+					player_health = maxf(0.0, player_health - (22.0 if phase_two else 13.0) * (0.35 if guarding else 1.0) * (100.0 / max_player_health))
 					_spawn_combat_flash(player.global_position + Vector3(0, 1.0, 0), Color(1.0, 0.025, 0.18) if phase_two else Color(0.72, 0.08, 1.0), 2.3)
 					_update_status()
 		elif distance < 5.2:
@@ -1016,7 +1100,7 @@ func _update_enemy_ai(delta: float) -> void:
 			enemy.global_position += to_player.normalized() * 1.6 * delta
 			enemy.look_at(Vector3(player.global_position.x, enemy.global_position.y, player.global_position.z), Vector3.UP)
 		elif player_hit_cooldown <= 0.0 and dodge_time <= 0.0:
-			var incoming_damage := 2.0 if guarding else 8.0
+			var incoming_damage := (2.0 if guarding else 8.0) * (100.0 / max_player_health)
 			player_health = maxf(0.0, player_health - incoming_damage)
 			_spawn_combat_flash(player.global_position + Vector3(0, 1.0, 0), Color(0.9, 0.03, 0.02), 1.4)
 			player_hit_cooldown = 1.0
@@ -1024,7 +1108,7 @@ func _update_enemy_ai(delta: float) -> void:
 
 func _update_status() -> void:
 	if status_label:
-		status_label.text = "Vida: %d  |  Horda: %d  |  Ordem: %s  |  Classe: %s  |  Combo: %d/3  |  Defesa: %s  |  Onda: %d" % [int(player_health), minions.size(), selected_order, selected_class, combo_step, "ON" if guarding else "OFF", wave]
+		status_label.text = "Nv.%d  XP %d/%d  |  Vida: %d/%d  |  Horda: %d  |  Ordem: %s  |  Classe: %s  |  Combo: %d/3  |  Defesa: %s  |  Onda: %d" % [player_level, player_xp, _xp_to_next_level(), int(player_health), int(max_player_health), minions.size(), selected_order, selected_class, combo_step, "ON" if guarding else "OFF", wave]
 
 func _physics_process(delta: float) -> void:
 	anim_clock += delta
