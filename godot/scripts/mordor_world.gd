@@ -626,7 +626,7 @@ func _update_enemy_ai(delta: float) -> void:
 
 func _update_status() -> void:
 	if status_label:
-		status_label.text = "Vida: %d  |  Horda: %d  |  Ordem: %s  |  Classe: %s  |  Onda: %d" % [int(player_health), minions.size(), selected_order, selected_class, wave]
+		status_label.text = "Vida: %d  |  Horda: %d  |  Ordem: %s  |  Classe: %s  |  Combo: %d/3  |  Defesa: %s  |  Onda: %d" % [int(player_health), minions.size(), selected_order, selected_class, combo_step, "ON" if guarding else "OFF", wave]
 
 func _physics_process(delta: float) -> void:
 	anim_clock += delta
