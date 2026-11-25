@@ -15,6 +15,7 @@ var selected_order := "SEGUIR"
 var selected_class := "BRUTAMONTES"
 var status_label: Label
 var attack_cooldown := 0.0
+var special_cooldown := 0.0
 var player_health := 100.0
 var player_hit_cooldown := 0.0
 var wave := 1
@@ -336,7 +337,7 @@ func _create_hud() -> void:
 	controls.offset_top = -76
 	controls.offset_bottom = -12
 	layer.add_child(controls)
-	for action in ["ATACAR", "MAGIA", "ORDEN", "CLASSE"]:
+	for action in ["ATACAR", "ESPECIAL", "ORDEN", "CLASSE"]:
 		var button := Button.new()
 		button.text = action
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -372,7 +373,7 @@ func _on_control(action: String) -> void:
 	match action:
 		"ATACAR":
 			_attack()
-		"MAGIA":
+		"ESPECIAL":
 			_cast_spell()
 		"ORDEN":
 			selected_order = "ATACAR" if selected_order == "SEGUIR" else "SEGUIR"
@@ -480,21 +481,78 @@ func _glow_material(tint: Color) -> StandardMaterial3D:
 	return mat
 
 func _cast_spell() -> void:
-	_spawn_combat_flash(player.global_position + Vector3(0, 1.0, -1.0), Color(0.55, 0.08, 0.95), 4.2)
-	_spawn_special_ring(player.global_position + Vector3(0, 0.12, -1.0), Color(0.48, 0.08, 1.0), 2.5)
-	_spawn_special_ring(player.global_position + Vector3(0, 1.4, -1.0), Color(0.12, 0.72, 1.0), 1.4)
+	if special_cooldown > 0.0:
+		return
+	special_cooldown = 5.0
+	match selected_class:
+		"BRUTAMONTES":
+			# Impacto pesado: dano em área curta e onda de choque.
+			_spawn_special_ring(player.global_position + Vector3(0, 0.12, 0), Color(1.0, 0.30, 0.045), 4.2)
+			_spawn_combat_flash(player.global_position + Vector3(0, 1.0, -0.8), Color(1.0, 0.38, 0.06), 3.4)
+			for enemy in enemies.duplicate():
+				if is_instance_valid(enemy) and player.global_position.distance_to(enemy.global_position) < 5.5:
+					_damage_enemy(enemy, 55.0)
+		"ASSASSINO":
+			# Três cortes rápidos no alvo mais próximo.
+			var target: Node3D = _nearest_enemy()
+			if target:
+				for hit in range(3):
+					if is_instance_valid(target):
+						_spawn_combat_flash(target.global_position + Vector3(0, 1.0, 0), Color(0.35, 1.0, 0.48), 1.25 + hit * 0.18)
+						_damage_enemy(target, 17.0)
+			else:
+				_spawn_combat_flash(player.global_position + Vector3(0, 1.0, -1.0), Color(0.35, 1.0, 0.48), 2.0)
+		"PIROMANTE":
+			_cast_fireball()
+		"XAMA":
+			# Pulso espiritual: recupera o senhor sombrio e fere inimigos próximos.
+			player_health = minf(100.0, player_health + 28.0)
+			_spawn_special_ring(player.global_position + Vector3(0, 0.15, 0), Color(0.12, 0.68, 1.0), 3.8)
+			_spawn_combat_flash(player.global_position + Vector3(0, 1.4, 0), Color(0.12, 0.68, 1.0), 2.6)
+			for enemy in enemies.duplicate():
+				if is_instance_valid(enemy) and player.global_position.distance_to(enemy.global_position) < 7.0:
+					_spawn_combat_flash(enemy.global_position + Vector3(0, 1.0, 0), Color(0.12, 0.68, 1.0), 1.8)
+					_damage_enemy(enemy, 22.0)
+	_update_status()
+
+func _nearest_enemy() -> Node3D:
+	var nearest: Node3D = null
+	var best_distance := 999.0
+	for enemy in enemies:
+		if is_instance_valid(enemy):
+			var distance := player.global_position.distance_to(enemy.global_position)
+			if distance < best_distance:
+				best_distance = distance
+				nearest = enemy
+	return nearest
+
+func _cast_fireball() -> void:
+	var target := _nearest_enemy()
+	var destination := player.global_position + player.global_basis * Vector3(0, 1.2, -9.0)
+	if target:
+		destination = target.global_position + Vector3(0, 1.0, 0)
+	var fireball := MeshInstance3D.new()
+	var orb := SphereMesh.new()
+	orb.radius = 0.38
+	orb.height = 0.76
+	fireball.mesh = orb
+	fireball.material_override = _glow_material(Color(1.0, 0.20, 0.025))
+	fireball.global_position = player.global_position + Vector3(0, 1.35, 0)
+	add_child(fireball)
+	var tween := create_tween()
+	tween.tween_property(fireball, "global_position", destination, 0.42).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_callback(_explode_fireball.bind(fireball))
+
+func _explode_fireball(fireball: Node3D) -> void:
+	if not is_instance_valid(fireball):
+		return
+	var impact := fireball.global_position
+	_spawn_combat_flash(impact, Color(1.0, 0.24, 0.025), 3.2)
+	_spawn_special_ring(impact, Color(1.0, 0.36, 0.04), 2.0)
 	for enemy in enemies.duplicate():
-		if is_instance_valid(enemy) and player.global_position.distance_to(enemy.global_position) < 12.0:
-			_spawn_combat_flash(enemy.global_position + Vector3(0, 1.0, 0), Color(0.62, 0.12, 1.0), 2.2)
-			_damage_enemy(enemy, 65.0)
-	var flash := OmniLight3D.new()
-	flash.position = player.position + Vector3(0, 1.2, -2)
-	flash.light_color = Color(0.55, 0.08, 0.95)
-	flash.light_energy = 4.0
-	flash.omni_range = 8.0
-	add_child(flash)
-	var timer := get_tree().create_timer(0.22)
-	timer.timeout.connect(flash.queue_free)
+		if is_instance_valid(enemy) and impact.distance_to(enemy.global_position) < 3.8:
+			_damage_enemy(enemy, 48.0)
+	fireball.queue_free()
 
 func _update_minion_combat(delta: float) -> void:
 	for minion in minions:
@@ -545,6 +603,7 @@ func _update_status() -> void:
 func _physics_process(delta: float) -> void:
 	anim_clock += delta
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)
+	special_cooldown = maxf(0.0, special_cooldown - delta)
 	var input := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 	var direction := Vector3(input.x, 0, input.y)
 	if direction.length() > 0.1:
