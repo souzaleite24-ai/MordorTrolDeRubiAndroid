@@ -28,6 +28,9 @@ class GameView(context: Context) : View(context) {
     private var sx = 0f; private var sy = 0f
     private var hp = 100f; private var kills = 0
     private var attack = 0f; private var shield = 0f; private var leap = 0f; private var dash = 0f
+    private var weaponIndex = 0
+    private var darkMagic = 0f
+    private val weapons = listOf("MACHADO", "ESPADA", "MARTELO", "CAJADO SOMBRIO")
     private var crouch = false; private var over = false
     private var time = 480f; private var day = 1
     private var last = System.nanoTime()
@@ -94,7 +97,7 @@ class GameView(context: Context) : View(context) {
         if(over) return
         time+=dt*3f; if(time>=1440f){time-=1440f;day++}
         attack=(attack-dt).coerceAtLeast(0f); shield=(shield-dt).coerceAtLeast(0f)
-        leap=(leap-dt).coerceAtLeast(0f); dash=(dash-dt).coerceAtLeast(0f)
+        leap=(leap-dt).coerceAtLeast(0f); dash=(dash-dt).coerceAtLeast(0f); darkMagic=(darkMagic-dt).coerceAtLeast(0f)
         val speed=when {dash>0f->430f;crouch->105f;else->245f}
         px+=sx*speed*dt; py+=sy*speed*dt
         animals.forEach { a ->
@@ -106,7 +109,7 @@ class GameView(context: Context) : View(context) {
             val dx=px-o.x; val dy=py-o.y; val d=hypot(dx,dy).coerceAtLeast(1f)
             if(d>50f){o.x+=dx/d*78f*dt;o.y+=dy/d*78f*dt}
             else if(shield<=0f&&leap<=0f) hp-=11f*dt
-            if(attack>0f&&d<130f)o.hp-=1
+            if(attack>0f&&d<when(weaponIndex){2->145f;3->205f;else->130f})o.hp-=if(weaponIndex==2)2 else 1
         }
         val dead=orcs.filter{it.hp<=0}; kills+=dead.size; orcs.removeAll(dead.toSet())
         if(orcs.isEmpty())repeat(6+kills/5){spawn()}
@@ -126,6 +129,7 @@ class GameView(context: Context) : View(context) {
         }
         orcs.forEach{o->p.color=Color.rgb(110,85,54);c.drawRoundRect(o.x-22,o.y-35,o.x+22,o.y+30,10f,10f,p);p.color=Color.RED;c.drawCircle(o.x-8,o.y-22,3f,p);c.drawCircle(o.x+8,o.y-22,3f,p)}
         drawTroll(c)
+        if(darkMagic>0f){p.color=Color.argb((95f*darkMagic/.8f).toInt().coerceIn(0,95),145,35,210);c.drawCircle(px,py-35f,235f*(1.15f-darkMagic),p);p.color=Color.argb(210,190,115,255);c.drawCircle(px,py-35f,28f+darkMagic*35f,p)}
         c.restore()
         boxText(c,"TROL DE RUBI",18f,18f,250f,74f)
         text(c,"VIDA ${hp.toInt()}   ORCS: $kills",30f,58f,15f,Color.WHITE)
@@ -142,7 +146,14 @@ class GameView(context: Context) : View(context) {
         c.drawOval(x-42,y-28,x+42,y+34,p);c.drawRoundRect(x-58,y-76,x+58,y+12,22f,22f,p);c.drawCircle(x,y-91,37f,p)
         p.color=Color.RED;c.drawCircle(x-14,y-98,6f,p);c.drawCircle(x+14,y-98,6f,p)
         p.color=Color.WHITE;c.drawCircle(x-14,y-98,2f,p);c.drawCircle(x+14,y-98,2f,p)
-        p.color=Color.rgb(92,57,27);c.drawRoundRect(x+37,y-120,x+62,y+20,8f,8f,p);c.drawCircle(x+50,y-115,20f,p)
+        p.color=Color.rgb(92,57,27)
+        when(weaponIndex){
+            0->{c.drawRoundRect(x+37,y-120,x+62,y+20,8f,8f,p);p.color=Color.LTGRAY;c.drawOval(x+45,y-135,x+85,y-92,p)}
+            1->{c.drawRoundRect(x+43,y-145,x+53,y+20,5f,5f,p);p.color=Color.LTGRAY;c.drawRect(x+35,y-135,x+61,y-128,p)}
+            2->{c.drawRoundRect(x+37,y-120,x+62,y+20,8f,8f,p);p.color=Color.GRAY;c.drawRoundRect(x+25,y-145,x+76,y-105,7f,7f,p)}
+            else->{p.color=Color.rgb(65,35,90);c.drawRoundRect(x+43,y-145,x+55,y+20,5f,5f,p);p.color=Color.rgb(175,75,255);c.drawCircle(x+49,y-148,22f,p);p.color=Color.argb(110,185,80,255);c.drawCircle(x+49,y-148,31f,p)}
+        }
+        center(c,weapons[weaponIndex],x,y+58f,12f,if(weaponIndex==3)Color.rgb(205,145,255) else Color.WHITE)
         if(shield>0){p.color=Color.argb(100,150,210,160);c.drawCircle(x,y-45,80f,p)}
         c.restore()
     }
@@ -190,16 +201,28 @@ class GameView(context: Context) : View(context) {
         }
         saveSettings();sfx()
     }
+    private fun stickCenterX():Float= (78f*joystickScale+20f).coerceAtMost(width*.28f)
+    private fun stickCenterY():Float= height-(78f*joystickScale+20f)
+    private fun actionRect(i:Int):RectF {
+        val size=(min(width*.145f,height*.19f).coerceAtLeast(43f)*buttonScale).coerceAtMost(76f)
+        val gap=7f
+        val col=i%3;val row=i/3
+        val right=width-12f
+        val left=(right-size)-(2-col)*(size+gap)
+        val top=height-12f-size-row*(size+gap)
+        return RectF(left,top,left+size,top+size)
+    }
     private fun controls(c:Canvas){
-        val w=width.toFloat();val h=height.toFloat()
-        val stickR=70f*joystickScale
-        p.color=Color.argb(90,220,225,220);c.drawCircle(100f,h-100f,stickR,p)
-        p.color=Color.WHITE;c.drawCircle(100f+sx*40f*joystickScale,h-100f+sy*40f*joystickScale,25f*joystickScale,p)
-        val labels=listOf("PULAR","ABAIXAR","DEFENDER","ATACAR","ADESTRAR","ESQUIVA")
-        labels.forEachIndexed{i,s->
-            val x=w-250f+(i%3)*82f;val y=h-130f+(i/3)*62f
-            p.color=when(i){2->Color.rgb(50,100,60);3->Color.rgb(130,45,35);4->Color.rgb(30,110,65);else->Color.rgb(38,48,43)}
-            c.drawRoundRect(x,y,x+76,y+54,10f,10f,p);center(c,s,x+38,y+33,10f,Color.WHITE)
+        val cx=stickCenterX();val cy=stickCenterY();val stickR=70f*joystickScale
+        p.color=Color.argb(95,220,225,220);c.drawCircle(cx,cy,stickR,p)
+        p.color=Color.WHITE;c.drawCircle(cx+sx*40f*joystickScale,cy+sy*40f*joystickScale,25f*joystickScale,p)
+        val labels=listOf("PULAR","DEFESA","ARMA","ATAQUE","MAGIA","ADESTRAR","ESQUIVA")
+        labels.forEachIndexed{i,label->
+            val r=actionRect(i);val cx2=r.centerX();val cy2=r.centerY()
+            p.color=when(i){2->Color.rgb(75,55,110);3->Color.rgb(145,45,35);4->Color.rgb(105,35,155);5->Color.rgb(30,110,65);else->Color.rgb(38,48,43)}
+            c.drawOval(r,p)
+            p.color=Color.argb(100,255,255,255);c.drawOval(RectF(r.left+3,r.top+3,r.right-3,r.bottom-3),p)
+            center(c,label,cx2,cy2+4f,(r.width()*.17f).coerceAtLeast(8f),Color.WHITE)
         }
     }
     private fun boxText(c:Canvas,s:String,l:Float,t:Float,r:Float,b:Float){p.color=Color.argb(180,5,10,8);c.drawRoundRect(l,t,r,b,12f,12f,p);text(s,l+12,t+25,16f,Color.WHITE)}
@@ -223,15 +246,21 @@ class GameView(context: Context) : View(context) {
                 }
                 if(x>w-105f && y<145f){settingsOpen=true;settingsPage=0;sfx();return true}
                 if(x<w*.34f&&y>h*.55f){pointer=e.getPointerId(i);stick(x,y);return true}
-                val col=((x-(w-250f))/82f).toInt();val row=((y-(h-130f))/62f).toInt()
-                if(col in 0..2&&row in 0..1)when(row*3+col){
-                    0->{leap=.6f;sfx(ToneGenerator.TONE_PROP_ACK)};1->{crouch=!crouch;sfx()};2->{shield=.7f;sfx(ToneGenerator.TONE_PROP_NACK)};3->{attack=.3f;sfx(ToneGenerator.TONE_PROP_ACK);val o=orcs.minByOrNull{hypot(it.x-px,it.y-py)};if(o!=null&&hypot(o.x-px,o.y-py)<140f)o.hp--};4->{animals.filter{!it.tame}.minByOrNull{hypot(it.x-px,it.y-py)}?.let{if(hypot(it.x-px,it.y-py)<160f)it.tame=true};sfx()};5->{dash=.4f;sfx()}
+                val hit=(0..6).firstOrNull{actionRect(it).contains(x,y)}
+                if(hit!=null)when(hit){
+                    0->{leap=.6f;sfx(ToneGenerator.TONE_PROP_ACK)}
+                    1->{shield=.7f;sfx(ToneGenerator.TONE_PROP_NACK)}
+                    2->{weaponIndex=(weaponIndex+1)%weapons.size;sfx()}
+                    3->{attack=.3f;sfx(ToneGenerator.TONE_PROP_ACK);val o=orcs.minByOrNull{hypot(it.x-px,it.y-py)};if(o!=null&&hypot(o.x-px,o.y-py)<when(weaponIndex){2->145f;3->205f;else->140f})o.hp-=if(weaponIndex==2)2 else 1}
+                    4->{if(weaponIndex==3){darkMagic=.8f;orcs.filter{hypot(it.x-px,it.y-py)<235f}.forEach{it.hp-=3};sfx(ToneGenerator.TONE_PROP_NACK)}else{sfx(ToneGenerator.TONE_PROP_NACK)}}
+                    5->{animals.filter{!it.tame}.minByOrNull{hypot(it.x-px,it.y-py)}?.let{if(hypot(it.x-px,it.y-py)<160f)it.tame=true};sfx()}
+                    6->{dash=.4f;sfx()}
                 }
             }
             MotionEvent.ACTION_MOVE->{for(i in 0 until e.pointerCount)if(e.getPointerId(i)==pointer)stick(e.getX(i),e.getY(i))}
             MotionEvent.ACTION_UP,MotionEvent.ACTION_POINTER_UP,MotionEvent.ACTION_CANCEL->{if(e.getPointerId(e.actionIndex)==pointer){pointer=-1;sx=0f;sy=0f}}
         };return true
     }
-    private fun stick(x:Float,y:Float){sx=(((x-100f)/(70f*joystickScale))*sensitivity).coerceIn(-1f,1f);sy=(((y-(height-100f))/(70f*joystickScale))*sensitivity).coerceIn(-1f,1f)}
+    private fun stick(x:Float,y:Float){sx=(((x-stickCenterX())/(70f*joystickScale))*sensitivity).coerceIn(-1f,1f);sy=(((y-stickCenterY())/(70f*joystickScale))*sensitivity).coerceIn(-1f,1f)}
     private fun reset(){hp=100f;px=0f;py=0f;kills=0;over=false;orcs.clear();repeat(6){spawn()};animals.forEach{it.tame=false}}
 }
