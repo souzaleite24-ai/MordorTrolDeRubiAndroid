@@ -494,6 +494,35 @@ func _create_npc() -> void:
 	npc_node = _make_actor(Color(0.12, 0.32, 0.30), 1.9)
 	npc_node.name = "OraculoDasCinzas"
 	npc_node.position = Vector3(-4.0, 0.0, -3.0)
+	# Silhueta exclusiva do Oráculo: manto longo, capuz e olhos verde-cinza.
+	var robe_material := StandardMaterial3D.new()
+	robe_material.albedo_color = Color(0.035, 0.12, 0.115)
+	robe_material.roughness = 0.92
+	var robe := MeshInstance3D.new()
+	var robe_mesh := CylinderMesh.new()
+	robe_mesh.top_radius = 0.22
+	robe_mesh.bottom_radius = 0.53
+	robe_mesh.height = 1.15
+	robe.mesh = robe_mesh
+	robe.position.y = 0.62
+	robe.material_override = robe_material
+	npc_node.add_child(robe)
+	var hood := MeshInstance3D.new()
+	var hood_mesh := SphereMesh.new()
+	hood_mesh.radius = 0.39
+	hood_mesh.height = 0.72
+	hood.mesh = hood_mesh
+	hood.scale = Vector3(1.12, 1.0, 0.9)
+	hood.position = Vector3(0, 1.76, 0.055)
+	hood.material_override = robe_material
+	npc_node.add_child(hood)
+	var oracle_eyes := _glow_material(Color(0.12, 0.95, 0.68))
+	for eye_name in ["MeshInstance3D"]:
+		pass
+	for child in npc_node.get_children():
+		if child is MeshInstance3D and child.material_override is StandardMaterial3D:
+			if child.position.y > 1.6 and child.position.z < -0.2:
+				child.material_override = oracle_eyes
 	var aura := OmniLight3D.new()
 	aura.position = Vector3(0, 2.0, 0)
 	aura.light_color = Color(0.20, 0.85, 0.72)
