@@ -548,7 +548,7 @@ func _create_hud() -> void:
 	layer.add_child(boss_intro_label)
 	inventory_panel = PanelContainer.new()
 	inventory_panel.position = Vector2(18, 158)
-	inventory_panel.custom_minimum_size = Vector2(290, 170)
+	inventory_panel.custom_minimum_size = Vector2(360, 290)
 	inventory_panel.visible = false
 	layer.add_child(inventory_panel)
 	var inventory_box := VBoxContainer.new()
@@ -556,6 +556,7 @@ func _create_hud() -> void:
 	inventory_label = Label.new()
 	inventory_label.text = _inventory_text()
 	inventory_label.add_theme_font_size_override("font_size", 14)
+	inventory_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	inventory_box.add_child(inventory_label)
 	for kind in ["BRUTAMONTES", "ASSASSINO", "PIROMANTE", "XAMA"]:
 		var equip_button := Button.new()
