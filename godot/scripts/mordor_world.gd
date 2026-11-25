@@ -967,6 +967,18 @@ func _damage_enemy(enemy: Node3D, amount: float) -> void:
 	var final_damage := amount * (1.0 + relic_damage_bonus + shop_damage_bonus)
 	var hp := float(enemy.get_meta("health", 90.0)) - final_damage
 	enemy.set_meta("health", hp)
+	# Reação curta ao impacto: flash, pulsação de escala e recuo visual.
+	_spawn_combat_flash(enemy.global_position + Vector3(0, 1.05, 0), Color(1.0, 0.32, 0.12), 1.15)
+	if not bool(enemy.get_meta("is_hit_reacting", false)):
+		enemy.set_meta("is_hit_reacting", true)
+		var base_scale := enemy.scale
+		var hit_tween := create_tween()
+		hit_tween.tween_property(enemy, "scale", base_scale * Vector3(1.10, 0.92, 1.10), 0.055)
+		hit_tween.tween_property(enemy, "scale", base_scale, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		hit_tween.tween_callback(func():
+			if is_instance_valid(enemy):
+				enemy.set_meta("is_hit_reacting", false)
+		)
 	if hp <= 0.0:
 		var at := enemy.global_position
 		var defeated_boss := bool(enemy.get_meta("is_boss", false))
