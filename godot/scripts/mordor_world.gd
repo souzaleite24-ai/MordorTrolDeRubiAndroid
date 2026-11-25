@@ -1435,7 +1435,7 @@ func _physics_process(delta: float) -> void:
 		player.velocity.y = 0.0
 	player.move_and_slide()
 	if move_direction.length_squared() > 0.01:
-		player.rotation.y = atan2(move_direction.x, move_direction.z)
+		player.rotation.y = atan2(-move_direction.x, -move_direction.z)
 	_animate_actor(player.get_child(0) as Node3D, delta, move_direction.length() * (1.0 if dodge_time <= 0.0 else 1.5), 0.0)
 	_update_boss_ai(delta)
 	_update_enemy_ai(delta)
