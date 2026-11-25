@@ -372,6 +372,7 @@ func _create_boss(at: Vector3) -> void:
 		eye.mesh = eye_mesh
 		eye.position = Vector3(side * 0.29, 3.13, -0.77)
 		eye.material_override = violet
+		eye.set_meta("boss_eye", true)
 		boss.add_child(eye)
 		var horn := MeshInstance3D.new()
 		var horn_mesh := CylinderMesh.new()
@@ -410,6 +411,7 @@ func _create_boss(at: Vector3) -> void:
 	crown.position.y = 3.63
 	crown.rotation.x = deg_to_rad(90)
 	crown.material_override = violet
+	crown.set_meta("boss_crown", true)
 	boss.add_child(crown)
 	add_child(boss)
 	enemies.append(boss)
@@ -746,7 +748,12 @@ func _update_boss_ai(delta: float) -> void:
 		if phase_two and not bool(boss.get_meta("phase_two", false)):
 			boss.set_meta("phase_two", true)
 			boss.set_meta("attack_timer", 0.7)
-			_spawn_special_ring(boss.global_position + Vector3(0, 0.15, 0), Color(0.78, 0.08, 0.95), 5.5)
+			boss.scale = Vector3.ONE * 1.82
+			for part in boss.get_children():
+				if part is MeshInstance3D and (bool(part.get_meta("boss_eye", false)) or bool(part.get_meta("boss_crown", false))):
+					part.material_override = _glow_material(Color(1.0, 0.025, 0.12))
+			_spawn_special_ring(boss.global_position + Vector3(0, 0.15, 0), Color(1.0, 0.025, 0.18), 6.2)
+			_spawn_combat_flash(boss.global_position + Vector3(0, 2.1, 0), Color(0.85, 0.015, 0.16), 4.0)
 		var to_player := player.global_position - boss.global_position
 		to_player.y = 0.0
 		var distance := to_player.length()
@@ -757,10 +764,14 @@ func _update_boss_ai(delta: float) -> void:
 		if telegraph > 0.0:
 			telegraph = maxf(0.0, telegraph - delta)
 			boss.set_meta("telegraph_timer", telegraph)
-			if telegraph <= 0.0 and distance < (4.8 if phase_two else 4.2) and dodge_time <= 0.0:
-				player_health = maxf(0.0, player_health - (18.0 if phase_two else 13.0) * (0.35 if guarding else 1.0))
-				_spawn_combat_flash(player.global_position + Vector3(0, 1.0, 0), Color(0.72, 0.08, 1.0), 2.3)
-				_update_status()
+			if telegraph <= 0.0:
+				var impact_distance := Vector2(player.global_position.x - boss.global_position.x, player.global_position.z - boss.global_position.z).length()
+				var impact_radius := 5.8 if phase_two else 4.4
+				_spawn_special_ring(boss.global_position + Vector3(0, 0.16, 0), Color(1.0, 0.025, 0.18) if phase_two else Color(0.68, 0.08, 0.95), impact_radius)
+				if impact_distance < impact_radius and dodge_time <= 0.0:
+					player_health = maxf(0.0, player_health - (22.0 if phase_two else 13.0) * (0.35 if guarding else 1.0))
+					_spawn_combat_flash(player.global_position + Vector3(0, 1.0, 0), Color(1.0, 0.025, 0.18) if phase_two else Color(0.72, 0.08, 1.0), 2.3)
+					_update_status()
 		elif distance < 5.2:
 			var timer := maxf(0.0, float(boss.get_meta("attack_timer", 1.8)) - delta)
 			if timer <= 0.0:
