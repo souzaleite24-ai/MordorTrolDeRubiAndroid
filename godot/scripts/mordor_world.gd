@@ -517,8 +517,6 @@ func _create_npc() -> void:
 	hood.material_override = robe_material
 	npc_node.add_child(hood)
 	var oracle_eyes := _glow_material(Color(0.12, 0.95, 0.68))
-	for eye_name in ["MeshInstance3D"]:
-		pass
 	for child in npc_node.get_children():
 		if child is MeshInstance3D and child.material_override is StandardMaterial3D:
 			if child.position.y > 1.6 and child.position.z < -0.2:
