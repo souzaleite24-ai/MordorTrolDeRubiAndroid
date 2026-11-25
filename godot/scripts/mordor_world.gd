@@ -15,6 +15,9 @@ var selected_order := "SEGUIR"
 var selected_class := "BRUTAMONTES"
 var status_label: Label
 var attack_cooldown := 0.0
+var player_health := 100.0
+var player_hit_cooldown := 0.0
+var wave := 1
 
 func _ready() -> void:
 	_setup_input()
@@ -160,6 +163,8 @@ func _create_enemy(at: Vector3) -> void:
 	var enemy := _make_actor(Color(0.34, 0.035, 0.025), 2.1)
 	enemy.name = "GuardiaoCorrompido"
 	enemy.position = at
+	enemy.set_meta("health", 90.0)
+	enemy.set_meta("attack_timer", 0.0)
 	add_child(enemy)
 	enemies.append(enemy)
 
@@ -212,23 +217,34 @@ func _on_control(action: String) -> void:
 			selected_class = keys[(keys.find(selected_class) + 1) % keys.size()]
 			_update_status()
 
+func _damage_enemy(enemy: Node3D, amount: float) -> void:
+	if not is_instance_valid(enemy):
+		return
+	var hp := float(enemy.get_meta("health", 90.0)) - amount
+	enemy.set_meta("health", hp)
+	if hp <= 0.0:
+		var at := enemy.global_position
+		enemies.erase(enemy)
+		enemy.queue_free()
+		if enemies.is_empty():
+			wave += 1
+			for i in range(mini(wave, 4)):
+				_create_enemy(at + Vector3(randf_range(-5, 5), 0, randf_range(-7, -3)))
+		_update_status()
+
 func _attack() -> void:
 	if attack_cooldown > 0.0:
 		return
 	attack_cooldown = 0.55
 	for enemy in enemies:
 		if is_instance_valid(enemy) and player.global_position.distance_to(enemy.global_position) < 4.0:
-			enemy.queue_free()
-			enemies.erase(enemy)
-			_create_enemy(Vector3(randf_range(-7, 7), 0, -14))
+			_damage_enemy(enemy, 42.0)
 			break
 
 func _cast_spell() -> void:
-	for enemy in enemies:
+	for enemy in enemies.duplicate():
 		if is_instance_valid(enemy) and player.global_position.distance_to(enemy.global_position) < 12.0:
-			enemy.queue_free()
-			enemies.erase(enemy)
-			break
+			_damage_enemy(enemy, 65.0)
 	var flash := OmniLight3D.new()
 	flash.position = player.position + Vector3(0, 1.2, -2)
 	flash.light_color = Color(0.55, 0.08, 0.95)
@@ -238,14 +254,55 @@ func _cast_spell() -> void:
 	var timer := get_tree().create_timer(0.22)
 	timer.timeout.connect(flash.queue_free)
 
+func _update_minion_combat(delta: float) -> void:
+	for minion in minions:
+		var target_enemy: Node3D = null
+		var best_distance := 999.0
+		for enemy in enemies:
+			if is_instance_valid(enemy):
+				var d := minion.global_position.distance_to(enemy.global_position)
+				if d < best_distance:
+					best_distance = d
+					target_enemy = enemy
+		var timer := maxf(0.0, float(minion.get_meta("attack_timer", 0.0)) - delta)
+		if selected_order == "ATACAR" and target_enemy and best_distance < 2.4 and timer <= 0.0:
+			var kind := String(minion.get_meta("class", "BRUTAMONTES"))
+			var damage := 18.0
+			match kind:
+				"BRUTAMONTES": damage = 28.0
+				"ASSASSINO": damage = 20.0
+				"PIROMANTE": damage = 24.0
+				"XAMA": damage = 10.0
+			_damage_enemy(target_enemy, damage)
+			timer = 0.9 if kind != "ASSASSINO" else 0.55
+		minion.set_meta("attack_timer", timer)
+
+func _update_enemy_ai(delta: float) -> void:
+	player_hit_cooldown = maxf(0.0, player_hit_cooldown - delta)
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+		var to_player := player.global_position - enemy.global_position
+		to_player.y = 0.0
+		var distance := to_player.length()
+		if distance > 1.7:
+			enemy.global_position += to_player.normalized() * 1.6 * delta
+			enemy.look_at(Vector3(player.global_position.x, enemy.global_position.y, player.global_position.z), Vector3.UP)
+		elif player_hit_cooldown <= 0.0:
+			player_health = maxf(0.0, player_health - 8.0)
+			player_hit_cooldown = 1.0
+			_update_status()
+
 func _update_status() -> void:
 	if status_label:
-		status_label.text = "Horda: %d lacaios  |  Ordem: %s  |  Classe: %s" % [minions.size(), selected_order, selected_class]
+		status_label.text = "Vida: %d  |  Horda: %d  |  Ordem: %s  |  Classe: %s  |  Onda: %d" % [int(player_health), minions.size(), selected_order, selected_class, wave]
 
 func _physics_process(delta: float) -> void:
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)
 	var input := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 	var direction := Vector3(input.x, 0, input.y)
+	if direction.length() > 0.1:
+		player.rotation.y = lerp_angle(player.rotation.y, atan2(-direction.x, -direction.z), 10.0 * delta)
 	player.velocity.x = direction.x * 6.0
 	player.velocity.z = direction.z * 6.0
 	if not player.is_on_floor():
@@ -255,6 +312,8 @@ func _physics_process(delta: float) -> void:
 	player.move_and_slide()
 	camera.global_position = camera.global_position.lerp(player.global_position + Vector3(0, 5.2, 9), 5.0 * delta)
 	camera.look_at(player.global_position + Vector3(0, 1, -3), Vector3.UP)
+	_update_enemy_ai(delta)
+	_update_minion_combat(delta)
 	for i in range(minions.size()):
 		var minion := minions[i]
 		var target := player.global_position + Vector3((i - 1.5) * 1.5, 0, 2.2)
