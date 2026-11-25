@@ -1,4 +1,4 @@
-name: Validate Godot 3D prototype
+name: Validate and export Mordor 3D
 
 on:
   push:
@@ -18,13 +18,58 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install Godot 4.3
+      - name: Install Godot 4.3 and export templates
         uses: chickensoft-games/setup-godot@v2
         with:
           version: 4.3.0
           use-dotnet: false
-          include-templates: false
+          include-templates: true
       - name: Import and validate project
         run: godot --headless --editor --path godot --quit
       - name: Run headless scene smoke test
         run: timeout 20s godot --headless --path godot --quit-after 3
+
+  android-debug-apk:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Godot 4.3 and export templates
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.3.0
+          use-dotnet: false
+          include-templates: true
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Configure Godot Android export
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.config/godot" "$HOME/.android" godot/build
+          keytool -genkeypair -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/debug_keystore = "$HOME/.android/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+      - name: Import project
+        run: godot --headless --editor --path godot --quit
+      - name: Export Android debug APK
+        run: godot --headless --path godot --export-debug "Android" godot/build/Mordor3D-debug.apk
+      - name: Upload test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mordor3D-Android-debug
+          path: godot/build/Mordor3D-debug.apk
+          if-no-files-found: error
+          retention-days: 14
