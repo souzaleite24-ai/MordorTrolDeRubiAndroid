@@ -203,10 +203,78 @@ func _make_actor(color: Color, height: float = 1.8) -> Node3D:
 	actor.add_child(belt)
 	return actor
 
+func _weapon_piece(parent: Node3D, mesh: Mesh, material: Material, at: Vector3, size: Vector3 = Vector3.ONE) -> MeshInstance3D:
+	var part := MeshInstance3D.new()
+	part.mesh = mesh
+	part.material_override = material
+	part.position = at
+	part.scale = size
+	parent.add_child(part)
+	return part
+
+func _add_weapon(actor: Node3D, kind: String) -> void:
+	var pivot := Node3D.new()
+	pivot.name = "WeaponPivot"
+	pivot.position = Vector3(0.56, 0.48, -0.18)
+	actor.add_child(pivot)
+	var metal := StandardMaterial3D.new()
+	metal.albedo_color = Color(0.12, 0.10, 0.09)
+	metal.metallic = 0.86
+	metal.roughness = 0.24
+	var edge := StandardMaterial3D.new()
+	edge.albedo_color = Color(0.68, 0.72, 0.78)
+	edge.metallic = 0.92
+	edge.roughness = 0.18
+	var glow := StandardMaterial3D.new()
+	glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow.albedo_color = MINION_COLORS.get(kind, Color(0.32, 0.12, 0.55))
+	glow.emission_enabled = true
+	glow.emission = glow.albedo_color
+	glow.emission_energy_multiplier = 2.4
+	if kind == "ASSASSINO":
+		for side in [-1.0, 1.0]:
+			var blade := BoxMesh.new()
+			blade.size = Vector3(0.10, 0.12, 0.78)
+			_weapon_piece(pivot, blade, edge, Vector3(side * 0.13, 0.02, -0.25), Vector3.ONE)
+			var grip := CylinderMesh.new()
+			grip.top_radius = 0.045
+			grip.bottom_radius = 0.045
+			grip.height = 0.28
+			_weapon_piece(pivot, grip, metal, Vector3(side * 0.13, -0.02, 0.23), Vector3.ONE)
+	elif kind == "BRUTAMONTES":
+		var shaft := CylinderMesh.new()
+		shaft.top_radius = 0.075
+		shaft.bottom_radius = 0.09
+		shaft.height = 1.05
+		_weapon_piece(pivot, shaft, metal, Vector3(0, 0, -0.12), Vector3.ONE)
+		var head := BoxMesh.new()
+		head.size = Vector3(0.62, 0.48, 0.38)
+		_weapon_piece(pivot, head, edge, Vector3(0, 0.52, -0.12), Vector3.ONE)
+		var spike := SphereMesh.new()
+		spike.radius = 0.16
+		spike.height = 0.32
+		_weapon_piece(pivot, spike, glow, Vector3(0, 0.52, -0.37), Vector3.ONE)
+	else:
+		var staff := CylinderMesh.new()
+		staff.top_radius = 0.045
+		staff.bottom_radius = 0.065
+		staff.height = 1.35
+		_weapon_piece(pivot, staff, metal, Vector3(0, 0.12, -0.08), Vector3.ONE)
+		var orb := SphereMesh.new()
+		orb.radius = 0.22
+		orb.height = 0.44
+		_weapon_piece(pivot, orb, glow, Vector3(0, 0.82, -0.08), Vector3.ONE)
+		for side in [-1.0, 1.0]:
+			var rune := SphereMesh.new()
+			rune.radius = 0.075
+			rune.height = 0.15
+			_weapon_piece(pivot, rune, edge if kind == "XAMA" else glow, Vector3(side * 0.19, 0.82, -0.08), Vector3.ONE)
+
 func _create_player() -> void:
 	player = CharacterBody3D.new()
 	player.name = "SenhorSombrio"
 	var visual := _make_actor(Color(0.12, 0.10, 0.09), 2.0)
+	_add_weapon(visual, "SOMBRA")
 	player.add_child(visual)
 	var collision := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
@@ -229,6 +297,7 @@ func _create_minions() -> void:
 	var classes := ["BRUTAMONTES", "ASSASSINO", "PIROMANTE", "XAMA"]
 	for i in range(4):
 		var minion := _make_actor(MINION_COLORS[classes[i]], 1.25)
+		_add_weapon(minion, classes[i])
 		minion.name = classes[i]
 		minion.set_meta("class", classes[i])
 		minion.position = Vector3((i - 1.5) * 1.7, 0, 6.5)
@@ -356,6 +425,9 @@ func _animate_actor(actor: Node3D, delta: float, speed: float, phase: float) -> 
 	actor.position.y = 0.045 * absf(stride) if moving else 0.025 * sin(anim_clock * 2.0 + phase)
 	var left_arm := actor.get_node_or_null("Arm_L") as Node3D
 	var right_arm := actor.get_node_or_null("Arm_R") as Node3D
+	var weapon := actor.get_node_or_null("WeaponPivot") as Node3D
+	if weapon and not actor.has_meta("weapon_striking"):
+		weapon.rotation.z = sin(anim_clock * 2.0 + phase) * 0.035
 	if left_arm:
 		left_arm.rotation.x = stride * 0.42
 	if right_arm:
@@ -365,6 +437,7 @@ func _attack() -> void:
 	if attack_cooldown > 0.0:
 		return
 	attack_cooldown = 0.55
+	_weapon_strike(player.get_child(0) as Node3D)
 	_spawn_combat_flash(player.global_position + player.global_basis * Vector3(0, 1.1, -1.35), Color(1.0, 0.58, 0.16), 2.8)
 	for enemy in enemies:
 		if is_instance_valid(enemy) and player.global_position.distance_to(enemy.global_position) < 4.0:
@@ -372,8 +445,44 @@ func _attack() -> void:
 			_damage_enemy(enemy, 42.0)
 			break
 
+func _weapon_strike(actor: Node3D) -> void:
+	var pivot := actor.get_node_or_null("WeaponPivot") as Node3D
+	if not pivot:
+		return
+	var tween := create_tween()
+	tween.tween_property(pivot, "rotation:x", -1.05, 0.10).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(pivot, "rotation:x", 0.0, 0.20).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+func _spawn_special_ring(at: Vector3, tint: Color, radius: float) -> void:
+	var ring := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.72
+	torus.outer_radius = 0.9
+	ring.mesh = torus
+	ring.material_override = _glow_material(tint)
+	ring.position = at
+	ring.rotation.x = deg_to_rad(90)
+	ring.scale = Vector3.ONE * 0.2
+	add_child(ring)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(ring, "scale", Vector3.ONE * radius, 0.38).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(ring, "rotation:z", TAU, 0.38)
+	tween.chain().tween_callback(ring.queue_free)
+
+func _glow_material(tint: Color) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = tint
+	mat.emission_enabled = true
+	mat.emission = tint
+	mat.emission_energy_multiplier = 3.5
+	return mat
+
 func _cast_spell() -> void:
 	_spawn_combat_flash(player.global_position + Vector3(0, 1.0, -1.0), Color(0.55, 0.08, 0.95), 4.2)
+	_spawn_special_ring(player.global_position + Vector3(0, 0.12, -1.0), Color(0.48, 0.08, 1.0), 2.5)
+	_spawn_special_ring(player.global_position + Vector3(0, 1.4, -1.0), Color(0.12, 0.72, 1.0), 1.4)
 	for enemy in enemies.duplicate():
 		if is_instance_valid(enemy) and player.global_position.distance_to(enemy.global_position) < 12.0:
 			_spawn_combat_flash(enemy.global_position + Vector3(0, 1.0, 0), Color(0.62, 0.12, 1.0), 2.2)
@@ -406,6 +515,7 @@ func _update_minion_combat(delta: float) -> void:
 				"ASSASSINO": damage = 20.0
 				"PIROMANTE": damage = 24.0
 				"XAMA": damage = 10.0
+			_weapon_strike(minion)
 			_spawn_combat_flash(target_enemy.global_position + Vector3(0, 1.0, 0), MINION_COLORS[kind], 1.35)
 			_damage_enemy(target_enemy, damage)
 			timer = 0.9 if kind != "ASSASSINO" else 0.55
