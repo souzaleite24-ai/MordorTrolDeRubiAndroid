@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<defs>
+ <radialGradient id="bg" cx="50%" cy="35%" r="75%"><stop stop-color="#681010"/><stop offset=".55" stop-color="#210809"/><stop offset="1" stop-color="#050507"/></radialGradient>
+ <linearGradient id="steel" x2="0" y2="1"><stop stop-color="#b9b3ad"/><stop offset=".35" stop-color="#45464d"/><stop offset="1" stop-color="#111218"/></linearGradient>
+ <linearGradient id="ruby" x2="1" y2="1"><stop stop-color="#fff2cf"/><stop offset=".2" stop-color="#ff4a35"/><stop offset=".65" stop-color="#b90018"/><stop offset="1" stop-color="#41000b"/></linearGradient>
+ <filter id="glow"><feGaussianBlur stdDeviation="9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<rect width="512" height="512" rx="108" fill="url(#bg)"/>
+<circle cx="256" cy="190" r="148" fill="#d10d20" opacity=".18" filter="url(#glow)"/>
+<path d="M54 260 87 116 164 69 256 34 348 69 425 116 458 260 420 245 385 153 319 107 256 85 193 107 127 153 92 245Z" fill="#09090d" stroke="#8c2528" stroke-width="9"/>
+<path d="M110 190 166 105 256 69 346 105 402 190 367 330 319 389 256 421 193 389 145 330Z" fill="url(#steel)" stroke="#17171c" stroke-width="13"/>
+<path d="M105 214 148 119 219 77 256 64 293 77 364 119 407 214 349 175 300 139 256 128 212 139 163 175Z" fill="#090a0e" stroke="#b32a2b" stroke-width="7"/>
+<path d="M154 229 208 205 239 216 256 237 273 216 304 205 358 229 333 266 286 252 256 274 226 252 179 266Z" fill="#08090d"/>
+<path d="M184 236 224 226 244 242 215 251Z M328 236 288 226 268 242 297 251Z" fill="#ff241f" filter="url(#glow)"/>
+<path d="M179 300 215 272 256 282 297 272 333 300 307 359 256 390 205 359Z" fill="#111116" stroke="#777078" stroke-width="7"/>
+<path d="M24 365 87 295 170 322 209 407 160 480 57 451Z M488 365 425 295 342 322 303 407 352 480 455 451Z" fill="url(#steel)" stroke="#14151b" stroke-width="12"/>
+<path d="M256 267 316 351 256 470 196 351Z" fill="#4a0710" stroke="#f04a37" stroke-width="9" filter="url(#glow)"/>
+<path d="M256 286 292 352 256 435 220 352Z" fill="url(#ruby)" stroke="#ffb18c" stroke-width="4"/>
+<path d="M256 286 256 435 M220 352 292 352" stroke="#ffd6b5" stroke-width="3" opacity=".8"/>
+<path d="M50 474 126 441 191 477 256 496 321 477 386 441 462 474" fill="none" stroke="#9e1c25" stroke-width="8"/>
+<rect x="10" y="10" width="492" height="492" rx="100" fill="none" stroke="#b84b3e" stroke-width="8" opacity=".8"/>
+</svg>
