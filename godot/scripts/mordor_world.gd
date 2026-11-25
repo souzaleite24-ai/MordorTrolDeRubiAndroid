@@ -615,6 +615,7 @@ func _damage_enemy(enemy: Node3D, amount: float) -> void:
 		if defeated_boss:
 			relic_count += 1
 			relic_damage_bonus += 0.10
+			_upgrade_minion_relics()
 			player_health = minf(100.0, player_health + 30.0)
 			_spawn_special_ring(at + Vector3(0, 0.15, 0), Color(0.72, 0.32, 1.0), 7.0)
 			_show_relic_reward()
@@ -632,6 +633,42 @@ func _damage_enemy(enemy: Node3D, amount: float) -> void:
 		_update_status()
 	else:
 		_update_boss_hud()
+
+func _upgrade_minion_relics() -> void:
+	var relic_colors := {
+		"BRUTAMONTES": Color(1.0, 0.36, 0.06),
+		"ASSASSINO": Color(0.18, 1.0, 0.48),
+		"PIROMANTE": Color(1.0, 0.12, 0.025),
+		"XAMA": Color(0.12, 0.52, 1.0)
+	}
+	for minion in minions:
+		var kind := String(minion.get_meta("class", "BRUTAMONTES"))
+		var glow_color: Color = relic_colors.get(kind, Color(0.7, 0.2, 1.0))
+		var emblem := minion.get_node_or_null("RelicEmblem") as MeshInstance3D
+		if emblem == null:
+			emblem = MeshInstance3D.new()
+			emblem.name = "RelicEmblem"
+			var gem := SphereMesh.new()
+			gem.radius = 0.16
+			gem.height = 0.32
+			emblem.mesh = gem
+			emblem.position = Vector3(0, 0.78, -0.45)
+			minion.add_child(emblem)
+			var halo := MeshInstance3D.new()
+			halo.name = "RelicHalo"
+			var halo_mesh := TorusMesh.new()
+			halo_mesh.inner_radius = 0.28
+			halo_mesh.outer_radius = 0.36
+			halo.mesh = halo_mesh
+			halo.position = Vector3(0, 1.38, 0)
+			halo.rotation.x = deg_to_rad(90)
+			minion.add_child(halo)
+		var glow := _glow_material(glow_color)
+		glow.emission_energy_multiplier = 2.2 + float(relic_count) * 0.45
+		emblem.material_override = glow
+		var halo_node := minion.get_node("RelicHalo") as MeshInstance3D
+		halo_node.material_override = glow
+		halo_node.scale = Vector3.ONE * (1.0 + float(relic_count - 1) * 0.12)
 
 func _show_relic_reward() -> void:
 	if not boss_intro_label:
