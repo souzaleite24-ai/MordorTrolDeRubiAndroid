@@ -357,6 +357,21 @@ func _make_actor(color: Color, height: float = 1.8) -> Node3D:
 	belt.position = Vector3(0, height * 0.34, 0)
 	belt.material_override = dark_metal
 	actor.add_child(belt)
+
+	# Pernas articuladas em pivôs próprios para uma passada visível.
+	for side in [-1.0, 1.0]:
+		var leg_pivot := Node3D.new()
+		leg_pivot.name = "Leg_L" if side < 0.0 else "Leg_R"
+		leg_pivot.position = Vector3(side * 0.19, height * 0.27, 0)
+		actor.add_child(leg_pivot)
+		var leg := MeshInstance3D.new()
+		var leg_mesh := CapsuleMesh.new()
+		leg_mesh.radius = 0.14
+		leg_mesh.height = height * 0.34
+		leg.mesh = leg_mesh
+		leg.position.y = -height * 0.12
+		leg.material_override = dark_metal
+		leg_pivot.add_child(leg)
 	return actor
 
 func _weapon_piece(parent: Node3D, mesh: Mesh, material: Material, at: Vector3, size: Vector3 = Vector3.ONE) -> MeshInstance3D:
@@ -1078,17 +1093,33 @@ func _animate_actor(actor: Node3D, delta: float, speed: float, phase: float) -> 
 	if not is_instance_valid(actor):
 		return
 	var moving := speed > 0.15
-	var stride := sin(anim_clock * (10.0 if moving else 2.0) + phase)
-	actor.position.y = 0.045 * absf(stride) if moving else 0.025 * sin(anim_clock * 2.0 + phase)
+	var gait_rate := 10.5 if moving else 2.0
+	var stride := sin(anim_clock * gait_rate + phase)
+	var idle_breath := sin(anim_clock * 2.2 + phase)
+	actor.position.y = 0.055 * absf(stride) if moving else 0.025 * idle_breath
+
 	var left_arm := actor.get_node_or_null("Arm_L") as Node3D
 	var right_arm := actor.get_node_or_null("Arm_R") as Node3D
+	var left_leg := actor.get_node_or_null("Leg_L") as Node3D
+	var right_leg := actor.get_node_or_null("Leg_R") as Node3D
 	var weapon := actor.get_node_or_null("WeaponPivot") as Node3D
-	if weapon and not actor.has_meta("weapon_striking"):
-		weapon.rotation.z = sin(anim_clock * 2.0 + phase) * 0.035
+	var chest := actor.get_node_or_null("TorsoPivot") as Node3D
+	var head := actor.get_node_or_null("HeadPivot") as Node3D
+
+	if left_leg:
+		left_leg.rotation.x = stride * 0.48 if moving else 0.025 * idle_breath
+	if right_leg:
+		right_leg.rotation.x = -stride * 0.48 if moving else -0.025 * idle_breath
 	if left_arm:
-		left_arm.rotation.x = stride * 0.42
-	if right_arm:
-		right_arm.rotation.x = -stride * 0.42
+		left_arm.rotation.x = -stride * 0.34 if moving else 0.035 * idle_breath
+	if right_arm and not actor.has_meta("weapon_striking"):
+		right_arm.rotation.x = stride * 0.34 if moving else -0.035 * idle_breath
+	if weapon and not actor.has_meta("weapon_striking"):
+		weapon.rotation.z = sin(anim_clock * (3.0 if moving else 1.8) + phase) * 0.045
+	if chest:
+		chest.rotation.z = sin(anim_clock * gait_rate + phase) * (0.035 if moving else 0.012)
+	if head:
+		head.rotation.x = sin(anim_clock * 1.4 + phase) * 0.025
 
 func _attack() -> void:
 	if attack_cooldown > 0.0:
