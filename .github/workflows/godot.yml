@@ -67,8 +67,12 @@ jobs:
           export/android/debug_keystore_user = "androiddebugkey"
           export/android/debug_keystore_pass = "android"
           EOF
+      - name: Install Android build template
+        run: godot --headless --editor --path godot --install-android-build-template --quit
       - name: Import project
         run: godot --headless --editor --path godot --quit
+      - name: Verify project scripts
+        run: godot --headless --path godot --quit-after 3
       - name: Export Android debug APK
         run: godot --headless --path godot --export-debug "Android" godot/build/Mordor3D-debug.apk
       - name: Upload test APK
