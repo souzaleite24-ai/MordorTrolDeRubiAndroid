@@ -18,6 +18,7 @@ var attack_cooldown := 0.0
 var player_health := 100.0
 var player_hit_cooldown := 0.0
 var wave := 1
+var anim_clock := 0.0
 
 func _ready() -> void:
 	_setup_input()
@@ -160,6 +161,7 @@ func _make_actor(color: Color, height: float = 1.8) -> Node3D:
 		var arm_mesh := CapsuleMesh.new()
 		arm_mesh.radius = 0.105
 		arm_mesh.height = height * 0.38
+		arm.name = "Arm_L" if side < 0.0 else "Arm_R"
 		arm.mesh = arm_mesh
 		arm.position = Vector3(side * 0.48, height * 0.43, -0.015)
 		arm.rotation.z = side * -0.12
@@ -169,6 +171,7 @@ func _make_actor(color: Color, height: float = 1.8) -> Node3D:
 		var bracer := MeshInstance3D.new()
 		var bracer_mesh := BoxMesh.new()
 		bracer_mesh.size = Vector3(0.19, 0.25, 0.2)
+		bracer.name = "Bracer_L" if side < 0.0 else "Bracer_R"
 		bracer.mesh = bracer_mesh
 		bracer.position = Vector3(side * 0.49, height * 0.31, -0.02)
 		bracer.material_override = trim
@@ -325,18 +328,56 @@ func _damage_enemy(enemy: Node3D, amount: float) -> void:
 				_create_enemy(at + Vector3(randf_range(-5, 5), 0, randf_range(-7, -3)))
 		_update_status()
 
+func _spawn_combat_flash(at: Vector3, tint: Color, radius: float) -> void:
+	var flash := MeshInstance3D.new()
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.22
+	mesh.height = 0.44
+	flash.mesh = mesh
+	var glow := StandardMaterial3D.new()
+	glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow.albedo_color = tint
+	glow.emission_enabled = true
+	glow.emission = tint
+	glow.emission_energy_multiplier = 2.8
+	flash.material_override = glow
+	flash.position = at
+	add_child(flash)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(flash, "scale", Vector3.ONE * radius, 0.24)
+	tween.tween_property(flash, "transparency", 1.0, 0.24)
+	tween.chain().tween_callback(flash.queue_free)
+
+func _animate_actor(actor: Node3D, delta: float, speed: float, phase: float) -> void:
+	if not is_instance_valid(actor):
+		return
+	var moving := speed > 0.15
+	var stride := sin(anim_clock * (10.0 if moving else 2.0) + phase)
+	actor.position.y = 0.045 * absf(stride) if moving else 0.025 * sin(anim_clock * 2.0 + phase)
+	var left_arm := actor.get_node_or_null("Arm_L") as Node3D
+	var right_arm := actor.get_node_or_null("Arm_R") as Node3D
+	if left_arm:
+		left_arm.rotation.x = stride * 0.42
+	if right_arm:
+		right_arm.rotation.x = -stride * 0.42
+
 func _attack() -> void:
 	if attack_cooldown > 0.0:
 		return
 	attack_cooldown = 0.55
+	_spawn_combat_flash(player.global_position + player.global_basis * Vector3(0, 1.1, -1.35), Color(1.0, 0.58, 0.16), 2.8)
 	for enemy in enemies:
 		if is_instance_valid(enemy) and player.global_position.distance_to(enemy.global_position) < 4.0:
+			_spawn_combat_flash(enemy.global_position + Vector3(0, 1.0, 0), Color(1.0, 0.25, 0.08), 1.7)
 			_damage_enemy(enemy, 42.0)
 			break
 
 func _cast_spell() -> void:
+	_spawn_combat_flash(player.global_position + Vector3(0, 1.0, -1.0), Color(0.55, 0.08, 0.95), 4.2)
 	for enemy in enemies.duplicate():
 		if is_instance_valid(enemy) and player.global_position.distance_to(enemy.global_position) < 12.0:
+			_spawn_combat_flash(enemy.global_position + Vector3(0, 1.0, 0), Color(0.62, 0.12, 1.0), 2.2)
 			_damage_enemy(enemy, 65.0)
 	var flash := OmniLight3D.new()
 	flash.position = player.position + Vector3(0, 1.2, -2)
@@ -366,6 +407,7 @@ func _update_minion_combat(delta: float) -> void:
 				"ASSASSINO": damage = 20.0
 				"PIROMANTE": damage = 24.0
 				"XAMA": damage = 10.0
+			_spawn_combat_flash(target_enemy.global_position + Vector3(0, 1.0, 0), MINION_COLORS[kind], 1.35)
 			_damage_enemy(target_enemy, damage)
 			timer = 0.9 if kind != "ASSASSINO" else 0.55
 		minion.set_meta("attack_timer", timer)
@@ -383,6 +425,7 @@ func _update_enemy_ai(delta: float) -> void:
 			enemy.look_at(Vector3(player.global_position.x, enemy.global_position.y, player.global_position.z), Vector3.UP)
 		elif player_hit_cooldown <= 0.0:
 			player_health = maxf(0.0, player_health - 8.0)
+			_spawn_combat_flash(player.global_position + Vector3(0, 1.0, 0), Color(0.9, 0.03, 0.02), 1.4)
 			player_hit_cooldown = 1.0
 			_update_status()
 
@@ -391,6 +434,7 @@ func _update_status() -> void:
 		status_label.text = "Vida: %d  |  Horda: %d  |  Ordem: %s  |  Classe: %s  |  Onda: %d" % [int(player_health), minions.size(), selected_order, selected_class, wave]
 
 func _physics_process(delta: float) -> void:
+	anim_clock += delta
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)
 	var input := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 	var direction := Vector3(input.x, 0, input.y)
@@ -403,6 +447,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		player.velocity.y = 0.0
 	player.move_and_slide()
+	_animate_actor(player.get_child(0) as Node3D, delta, direction.length(), 0.0)
 	camera.global_position = camera.global_position.lerp(player.global_position + Vector3(0, 5.2, 9), 5.0 * delta)
 	camera.look_at(player.global_position + Vector3(0, 1, -3), Vector3.UP)
 	_update_enemy_ai(delta)
@@ -412,4 +457,10 @@ func _physics_process(delta: float) -> void:
 		var target := player.global_position + Vector3((i - 1.5) * 1.5, 0, 2.2)
 		if selected_order == "ATACAR" and not enemies.is_empty():
 			target = enemies[0].global_position + Vector3((i - 1.5) * 0.8, 0, 1.5)
+		var old_position := minion.global_position
 		minion.global_position = minion.global_position.lerp(target, 2.8 * delta)
+		var minion_speed := old_position.distance_to(minion.global_position) / maxf(delta, 0.001)
+		_animate_actor(minion, delta, minion_speed, float(i) * 1.3)
+	for enemy in enemies:
+		if is_instance_valid(enemy):
+			_animate_actor(enemy, delta, 1.0, 2.0)
