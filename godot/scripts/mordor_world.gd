@@ -346,7 +346,6 @@ func _spawn_combat_flash(at: Vector3, tint: Color, radius: float) -> void:
 	var tween := create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(flash, "scale", Vector3.ONE * radius, 0.24)
-	tween.tween_property(flash, "transparency", 1.0, 0.24)
 	tween.chain().tween_callback(flash.queue_free)
 
 func _animate_actor(actor: Node3D, delta: float, speed: float, phase: float) -> void:
