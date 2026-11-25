@@ -92,7 +92,7 @@ func _gain_experience(amount: int) -> void:
 		unspent_attribute_points += 1
 		gained_levels += 1
 	if gained_levels > 0:
-		boss_intro_label.text = "NÍVEL %d ALCANÇADO!\\n+%d PONTO(S) DE ATRIBUTO" % [player_level, gained_levels]
+		boss_intro_label.text = "NÍVEL %d ALCANÇADO!\n+%d PONTO(S) DE ATRIBUTO" % [player_level, gained_levels]
 		boss_intro_label.visible = true
 		boss_intro_label.modulate.a = 1.0
 		var level_tween := create_tween()
@@ -947,7 +947,7 @@ func _cast_spell() -> void:
 			_cast_fireball()
 		"XAMA":
 			# Pulso espiritual: recupera o senhor sombrio e fere inimigos próximos.
-			player_health = minf(100.0, player_health + 28.0)
+			player_health = minf(max_player_health, player_health + 28.0 + float(vitality_attribute) * 0.5)
 			_spawn_special_ring(player.global_position + Vector3(0, 0.15, 0), Color(0.12, 0.68, 1.0), 3.8)
 			_spawn_combat_flash(player.global_position + Vector3(0, 1.4, 0), Color(0.12, 0.68, 1.0), 2.6)
 			for enemy in enemies.duplicate():
