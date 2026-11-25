@@ -70,6 +70,11 @@ func _ready() -> void:
 	_create_npc()
 	_create_player()
 	_create_minions()
+	if relic_count > 0:
+		_upgrade_minion_relics()
+	for minion in minions:
+		var kind := String(minion.get_meta("class", "BRUTAMONTES"))
+		minion.set_meta("equipment_tier", int(equipment_tiers.get(kind, 0)))
 	_create_enemy(Vector3(0, 0, -11))
 	_create_hud()
 	_update_status()
@@ -94,6 +99,10 @@ func _load_progress() -> void:
 	quest_index = clampi(int(save.get_value("quests", "index", 0)), 0, 1)
 	quest_progress = maxi(0, int(save.get_value("quests", "progress", 0)))
 	quests_completed = maxi(0, int(save.get_value("quests", "completed", 0)))
+	relic_count = maxi(0, int(save.get_value("relics", "count", 0)))
+	relic_damage_bonus = maxf(0.0, float(save.get_value("relics", "damage_bonus", float(relic_count) * 0.10)))
+	for kind in ["BRUTAMONTES", "ASSASSINO", "PIROMANTE", "XAMA"]:
+		equipment_tiers[kind] = clampi(int(save.get_value("equipment", kind, 0)), 0, mini(relic_count, 3))
 	max_player_health = 100.0 + float(vitality_attribute) * 10.0 + shop_health_bonus
 	player_health = max_player_health
 
@@ -111,6 +120,10 @@ func _save_progress() -> void:
 	save.set_value("quests", "index", quest_index)
 	save.set_value("quests", "progress", quest_progress)
 	save.set_value("quests", "completed", quests_completed)
+	save.set_value("relics", "count", relic_count)
+	save.set_value("relics", "damage_bonus", relic_damage_bonus)
+	for kind in ["BRUTAMONTES", "ASSASSINO", "PIROMANTE", "XAMA"]:
+		save.set_value("equipment", kind, int(equipment_tiers.get(kind, 0)))
 	save.save("user://mordor_progress.cfg")
 
 func _gain_experience(amount: int) -> void:
@@ -1073,6 +1086,7 @@ func _damage_enemy(enemy: Node3D, amount: float) -> void:
 			_spawn_special_ring(at + Vector3(0, 0.15, 0), Color(0.72, 0.32, 1.0), 7.0)
 			_show_relic_reward()
 			_update_inventory()
+			_save_progress()
 			if boss_name_label:
 				boss_name_label.visible = false
 			if boss_health_bar:
@@ -1137,6 +1151,7 @@ func _cycle_equipment(kind: String) -> void:
 		if is_instance_valid(minion) and String(minion.get_meta("class", "")) == kind:
 			minion.set_meta("equipment_tier", int(equipment_tiers[kind]))
 	_update_inventory()
+	_save_progress()
 
 func _inventory_text() -> String:
 	return "INVENTÁRIO ABISSAL\nNível %d  |  XP: %d/%d  |  Pontos: %d\nForça %d  •  Vitalidade %d  •  Arcano %d\nVida máxima: %d  |  Relíquias: %d  |  Dano global: +%d%%\nFragmentos de Cinza: %d  |  Bônus da loja: +%d%% dano / +%d vida\nEquipamentos aprimorados causam mais dano e atacam mais rápido.\nCada relíquia libera um nível (máx. 3)." % [player_level, player_xp, _xp_to_next_level(), unspent_attribute_points, strength_attribute, vitality_attribute, arcane_attribute, int(max_player_health), relic_count, int(relic_damage_bonus * 100.0), ash_shards, int(shop_damage_bonus * 100.0), int(shop_health_bonus)]
