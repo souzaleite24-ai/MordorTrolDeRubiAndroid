@@ -28,6 +28,9 @@ var wave := 1
 var anim_clock := 0.0
 var boss_health_bar: ProgressBar
 var boss_name_label: Label
+var boss_intro_label: Label
+var boss_intro_timer := 0.0
+var boss_intro_target: Node3D
 
 func _ready() -> void:
 	_setup_input()
@@ -383,6 +386,17 @@ func _create_boss_arena(center: Vector3) -> void:
 	add_child(arena)
 
 func _boss_entrance(boss: Node3D) -> void:
+	boss_intro_timer = 3.8
+	boss_intro_target = boss
+	if boss_intro_label:
+		boss_intro_label.text = "NEKRAVOR\nO TIRANO ABISSAL"
+		boss_intro_label.visible = true
+		boss_intro_label.modulate.a = 0.0
+		var title_tween := create_tween()
+		title_tween.tween_property(boss_intro_label, "modulate:a", 1.0, 0.55)
+		title_tween.tween_interval(2.3)
+		title_tween.tween_property(boss_intro_label, "modulate:a", 0.0, 0.65)
+		title_tween.tween_callback(func(): boss_intro_label.visible = false)
 	boss.scale = Vector3.ONE * 0.08
 	var reveal := create_tween()
 	reveal.tween_interval(0.45)
@@ -512,6 +526,18 @@ func _create_hud() -> void:
 	boss_health_bar.value = 720.0
 	boss_health_bar.visible = false
 	vbox.add_child(boss_health_bar)
+	boss_intro_label = Label.new()
+	boss_intro_label.text = "NEKRAVOR"
+	boss_intro_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	boss_intro_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	boss_intro_label.anchor_left = 0.2
+	boss_intro_label.anchor_right = 0.8
+	boss_intro_label.anchor_top = 0.28
+	boss_intro_label.anchor_bottom = 0.48
+	boss_intro_label.add_theme_font_size_override("font_size", 34)
+	boss_intro_label.add_theme_color_override("font_color", Color(0.88, 0.68, 1.0))
+	boss_intro_label.visible = false
+	layer.add_child(boss_intro_label)
 	var controls := HBoxContainer.new()
 	controls.anchor_left = 0.0
 	controls.anchor_top = 1.0
@@ -553,6 +579,8 @@ func _release_direction(action: String) -> void:
 	Input.action_release(action)
 
 func _on_control(action: String) -> void:
+	if boss_intro_timer > 0.0:
+		return
 	match action:
 		"ATACAR":
 			_attack()
@@ -653,7 +681,8 @@ func _attack() -> void:
 func _dodge() -> void:
 	if dodge_cooldown > 0.0:
 		return
-	var input := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	boss_intro_timer = maxf(0.0, boss_intro_timer - delta)
+	var input := Vector2.ZERO if boss_intro_timer > 0.0 else Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 	dodge_direction = Vector3(input.x, 0, input.y)
 	if dodge_direction.length() < 0.1:
 		dodge_direction = -player.global_basis.z
@@ -812,6 +841,8 @@ func _update_boss_ai(delta: float) -> void:
 	for boss in enemies:
 		if not is_instance_valid(boss) or not bool(boss.get_meta("is_boss", false)):
 			continue
+		if boss_intro_timer > 0.0:
+			continue
 		var hp := float(boss.get_meta("health", 720.0))
 		var phase_two := hp <= 360.0
 		if phase_two and not bool(boss.get_meta("phase_two", false)):
@@ -904,8 +935,13 @@ func _physics_process(delta: float) -> void:
 		player.velocity.y = 0.0
 	player.move_and_slide()
 	_animate_actor(player.get_child(0) as Node3D, delta, direction.length(), 0.0)
-	camera.global_position = camera.global_position.lerp(player.global_position + Vector3(0, 5.2, 9), 5.0 * delta)
-	camera.look_at(player.global_position + Vector3(0, 1, -3), Vector3.UP)
+	if boss_intro_timer > 0.0 and is_instance_valid(boss_intro_target):
+		var intro_camera := boss_intro_target.global_position + Vector3(0, 5.0, 11.5)
+		camera.global_position = camera.global_position.lerp(intro_camera, 2.2 * delta)
+		camera.look_at(boss_intro_target.global_position + Vector3(0, 2.0, 0), Vector3.UP)
+	else:
+		camera.global_position = camera.global_position.lerp(player.global_position + Vector3(0, 5.2, 9), 5.0 * delta)
+		camera.look_at(player.global_position + Vector3(0, 1, -3), Vector3.UP)
 	_update_enemy_ai(delta)
 	_update_boss_ai(delta)
 	_update_minion_combat(delta)
