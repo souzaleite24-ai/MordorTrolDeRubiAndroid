@@ -17,6 +17,7 @@ var status_label: Label
 var attack_cooldown := 0.0
 
 func _ready() -> void:
+	_setup_input()
 	_setup_environment()
 	_create_ground()
 	_create_ruins()
@@ -25,6 +26,19 @@ func _ready() -> void:
 	_create_enemy(Vector3(0, 0, -11))
 	_create_hud()
 	_update_status()
+
+func _setup_input() -> void:
+	var bindings := {
+		"ui_left": [KEY_A],
+		"ui_right": [KEY_D],
+		"ui_up": [KEY_W],
+		"ui_down": [KEY_S]
+	}
+	for action in bindings:
+		for keycode in bindings[action]:
+			var event := InputEventKey.new()
+			event.physical_keycode = keycode
+			InputMap.action_add_event(action, event)
 
 func _setup_environment() -> void:
 	var world_env := WorldEnvironment.new()
